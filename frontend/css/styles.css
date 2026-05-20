@@ -572,6 +572,26 @@ body {
     }
 }
 
+/* Extra small phones */
+@media (max-width: 360px) {
+    .logo span {
+        font-size: 0.875rem;
+    }
+
+    .stats-badge {
+        padding: 0.25rem 0.5rem;
+        gap: 0.25rem;
+    }
+
+    .stat-number {
+        font-size: 0.875rem;
+    }
+
+    .stat-label {
+        font-size: 0.625rem;
+    }
+}
+
 /* Utility Classes */
 .hidden {
     display: none !important;
