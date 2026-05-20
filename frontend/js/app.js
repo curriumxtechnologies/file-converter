@@ -81,6 +81,7 @@ class AppState {
 // ============================================================================
 // API Client
 // ============================================================================
+// API Client
 class ApiClient {
     static async uploadFiles(files) {
         const formData = new FormData();
@@ -89,16 +90,23 @@ class ApiClient {
         const endpoint = `${API_BASE_URL}/convert`;
         console.log(`📤 Uploading ${files.length} file(s) to ${endpoint}`);
 
-        // Retry logic for Render free tier connection issues
-        const maxRetries = 2;
+        // Render free tier cold start can take 30-60 seconds
+        const maxRetries = 5;  // Increased from 2
         let lastError = null;
 
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
             try {
+                // Longer timeout for cold starts
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout
+
                 const response = await fetch(endpoint, {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    signal: controller.signal
                 });
+
+                clearTimeout(timeoutId);
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
@@ -128,31 +136,40 @@ class ApiClient {
                 }
             } catch (error) {
                 lastError = error;
-                console.warn(`⚠️ Attempt ${attempt + 1}/${maxRetries + 1} failed: ${error.message}`);
-
-                // Only retry on connection errors, not on server errors
-                if (attempt < maxRetries && (
-                    error.message.includes('PING_FAILED') ||
-                    error.message.includes('CONNECTION_CLOSED') ||
+                
+                // Check if it's a cold start or connection error
+                const isColdStart = 
+                    error.message.includes('SUSPENDED') ||
                     error.message.includes('Failed to fetch') ||
-                    error.message.includes('NetworkError')
-                )) {
-                    const waitTime = (attempt + 1) * 2000; // 2s, 4s
-                    console.log(`🔄 Retrying in ${waitTime / 1000}s...`);
+                    error.message.includes('NetworkError') ||
+                    error.message.includes('CONNECTION') ||
+                    error.message.includes('AbortError') ||
+                    error.name === 'AbortError';
+
+                if (attempt < maxRetries && isColdStart) {
+                    // Exponential backoff: 3s, 6s, 12s, 24s, 48s
+                    const waitTime = Math.min(3000 * Math.pow(2, attempt), 50000);
+                    console.log(`⏳ Cold start detected. Retrying in ${waitTime / 1000}s... (${attempt + 1}/${maxRetries + 1})`);
+                    
+                    // Update UI to show we're waiting
+                    const pending = files;
+                    if (typeof this.updateStatus === 'function') {
+                        this.updateStatus(`Waking up server... ${waitTime / 1000}s`);
+                    }
+                    
                     await new Promise(resolve => setTimeout(resolve, waitTime));
                     continue;
                 }
                 throw error;
             }
         }
-        throw lastError || new Error('Upload failed after retries');
+        throw lastError || new Error('Upload failed after all retries');
     }
 
     static async getStats() {
         try {
-            // Short timeout to avoid hanging on free tier
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
 
             const res = await fetch(`${API_BASE_URL}/stats`, {
                 signal: controller.signal
@@ -162,18 +179,34 @@ class ApiClient {
 
             if (res.ok) {
                 const data = await res.json();
-                console.log(`📊 Stats: ${data.conversions_today || 0} today`);
                 return data;
             }
         } catch (e) {
-            // Silently fail - expected on free tier during load
-            if (e.name === 'AbortError') {
-                console.log('⏱️ Stats request timed out');
-            } else {
-                console.log('💤 Stats unavailable (server may be sleeping)');
-            }
+            // Silently fail for stats
         }
         return null;
+    }
+
+    // Wake up server with a ping (call on page load)
+    static async wakeUpServer() {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            
+            const res = await fetch(`${API_BASE_URL}/health`, {
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (res.ok) {
+                console.log('⚡ Server is awake');
+                return true;
+            }
+        } catch (e) {
+            console.log('💤 Server is sleeping - will wake on first request');
+        }
+        return false;
     }
 }
 
@@ -306,17 +339,20 @@ class UIManager {
             return;
         }
 
-        // Block stats during conversion
         this.isConverting = true;
 
         console.log(`🔄 Starting conversion of ${pending.length} file(s)...`);
 
-        // Update button state
         this.elements.convertBtn.disabled = true;
-        this.elements.convertBtn.innerHTML = '<span class="spinner"></span> Converting...';
-
+        
+        // Show different message for first request (cold start likely)
+        this.elements.convertBtn.innerHTML = '<span class="spinner"></span> Connecting...';
+        
         // Mark files as converting
-        pending.forEach(f => this.state.updateFile(f.id, { status: 'converting', progress: 50 }));
+        pending.forEach(f => this.state.updateFile(f.id, { 
+            status: 'converting', 
+            progress: 10  // Start at 10% to show progress
+        }));
 
         try {
             const startTime = performance.now();
@@ -568,8 +604,16 @@ class UIManager {
 // ============================================================================
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 HEIC to PNG Converter initialized');
+    
     const state = new AppState();
     const ui = new UIManager(state);
+
+    // Wake up the Render server in background
+    ApiClient.wakeUpServer().then(awake => {
+        if (awake) {
+            ui.loadStats();
+        }
+    });
 
     // Handle paste events for HEIC files
     document.addEventListener('paste', (e) => {
