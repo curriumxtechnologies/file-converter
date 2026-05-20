@@ -10,22 +10,25 @@ from routers.convert import router as convert_router
 
 load_dotenv()
 
-# Get allowed origins from env
-ALLOWED_ORIGINS = os.getenv(
-    "ALLOWED_ORIGINS",
-    "https://heic-converter.vercel.app,http://localhost:3000,http://127.0.0.1:5500"
-).split(",")
+# Allowed origins - production and local development
+ALLOWED_ORIGINS = [
+    "https://fileconverter.curriumx.online", 
+    "http://127.0.0.1:5500",                  
+    "http://localhost:5500"                  
+]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("🚀 Starting HEIC Converter API...")
+    print(f"🔒 Allowed origins: {ALLOWED_ORIGINS}")
     try:
         await connect_to_mongo()
         print("📦 MongoDB connected")
     except Exception as e:
-        print(f"⚠️ MongoDB unavailable: {e}")
+        print(f"⚠️ MongoDB unavailable (stats disabled): {e}")
     yield
     await close_mongo_connection()
+    print("👋 Shutdown complete")
 
 app = FastAPI(
     title="HEIC to PNG Converter API",
@@ -33,14 +36,21 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS
+# CORS - Strict configuration with your origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in ALLOWED_ORIGINS if o.strip()],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["Content-Disposition", "X-Files-Converted", "X-Conversion-Time-Ms"]
+    expose_headers=[
+        "Content-Disposition",
+        "Content-Length",
+        "X-Conversion-Time-Ms",
+        "X-Files-Converted",
+        "X-Files-Failed"
+    ],
+    max_age=3600  # Cache preflight requests for 1 hour
 )
 
 # Cleanup middleware
@@ -60,12 +70,17 @@ async def root():
         "version": "1.0.0",
         "status": "online",
         "endpoints": {
-            "convert": "/convert",
-            "stats": "/stats",
-            "health": "/health"
-        }
+            "convert": "POST /convert",
+            "stats": "GET /stats",
+            "health": "GET /health"
+        },
+        "limits": {
+            "max_file_size": "50MB",
+            "batch_supported": True
+        },
+        "allowed_origins": ALLOWED_ORIGINS
     }
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "allowed_origins": ALLOWED_ORIGINS}
