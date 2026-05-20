@@ -231,6 +231,53 @@
       </div>
     </footer>
 
+    <!-- Feedback Modal -->
+    <div class="modal-overlay" id="feedbackModal" style="display: none">
+      <div class="modal">
+        <button class="modal-close" id="feedbackClose">&times;</button>
+        <div class="modal-icon">💡</div>
+        <h3 class="modal-title">What should we build next?</h3>
+        <p class="modal-subtitle">
+          Tell us what other files you want to convert.
+        </p>
+        <form
+          id="feedbackForm"
+          action="https://formspree.io/f/mykvedpg"
+          method="POST"
+        >
+          <input
+            type="text"
+            name="suggestion"
+            class="modal-input"
+            placeholder="PDF to PNG"
+            required
+            autocomplete="off"
+          />
+          <button type="submit" class="btn btn-primary modal-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            Send
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Thank You Modal -->
+    <div class="modal-overlay" id="thankYouModal" style="display: none">
+      <div class="modal modal-thanks">
+        <div class="thanks-check">✅</div>
+        <h3 class="modal-title">Thank you!</h3>
+        <p class="modal-subtitle">We appreciate your feedback.</p>
+      </div>
+    </div>
+
     <script src="js/app.js"></script>
   </body>
 </html>

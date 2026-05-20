@@ -33,6 +33,7 @@ class AppState {
         this.files = new Map();
         this.listeners = new Set();
         this.zipBlob = null;
+        this.hasShownFeedback = false; // Track if feedback was shown this session
     }
 
     addFile(file) {
@@ -117,15 +118,14 @@ class HeicConverter {
         const results = [];
         let completed = 0;
 
-        // Process files in parallel with concurrency limit
         const CONCURRENCY = navigator.hardwareConcurrency || 4;
         const queue = [...files];
-        
+
         const worker = async () => {
             while (queue.length > 0) {
                 const fileData = queue.shift();
                 if (!fileData) break;
-                
+
                 const result = await this.convertFile(fileData.file, fileData.id, state);
                 results.push({ fileData, result });
                 completed++;
@@ -133,11 +133,10 @@ class HeicConverter {
             }
         };
 
-        // Start multiple workers
         const workers = Array(Math.min(CONCURRENCY, files.length))
             .fill(null)
             .map(() => worker());
-        
+
         await Promise.all(workers);
         return results;
     }
@@ -145,7 +144,7 @@ class HeicConverter {
     static async createZip(files) {
         const JSZip = await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');
         const zip = new JSZip.default();
-        
+
         const usedNames = new Set();
         files.forEach(f => {
             let name = f.name;
@@ -173,6 +172,7 @@ class UIManager {
         this.initEventListeners();
         this.state.subscribe(this.render.bind(this));
         this.updateStats();
+        this.initFeedbackModals();
     }
 
     cacheElements() {
@@ -224,6 +224,109 @@ class UIManager {
         document.addEventListener('drop', e => e.preventDefault());
     }
 
+    // ==========================================================================
+    // Feedback Modals
+    // ==========================================================================
+    initFeedbackModals() {
+        // Feedback modal
+        const feedbackModal = document.getElementById('feedbackModal');
+        const feedbackForm = document.getElementById('feedbackForm');
+        const feedbackClose = document.getElementById('feedbackClose');
+        const feedbackInput = feedbackModal?.querySelector('.modal-input');
+
+        if (feedbackClose) {
+            feedbackClose.addEventListener('click', () => {
+                feedbackModal.style.display = 'none';
+            });
+        }
+
+        if (feedbackModal) {
+            feedbackModal.addEventListener('click', (e) => {
+                if (e.target === feedbackModal) {
+                    feedbackModal.style.display = 'none';
+                }
+            });
+        }
+
+        if (feedbackForm) {
+            feedbackForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(feedbackForm);
+                const submitBtn = feedbackForm.querySelector('button[type="submit"]');
+
+                // Show loading state
+                const originalHTML = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<span class="spinner"></span> Sending...';
+                submitBtn.disabled = true;
+
+                try {
+                    await fetch(feedbackForm.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'Accept': 'application/json' }
+                    });
+                } catch (error) {
+                    console.log('Formspree may be unavailable, but continuing...');
+                }
+
+                // Hide feedback modal
+                feedbackModal.style.display = 'none';
+                feedbackForm.reset();
+                submitBtn.innerHTML = originalHTML;
+                submitBtn.disabled = false;
+
+                // Show thank you modal
+                this.showThankYouModal();
+
+                // Remember that we showed feedback
+                this.state.hasShownFeedback = true;
+                localStorage.setItem('heic_feedback_shown', 'true');
+            });
+        }
+
+        // Thank you modal
+        const thankYouModal = document.getElementById('thankYouModal');
+        if (thankYouModal) {
+            thankYouModal.addEventListener('click', (e) => {
+                if (e.target === thankYouModal) {
+                    thankYouModal.style.display = 'none';
+                }
+            });
+        }
+
+        // Check if feedback was already shown this session
+        this.state.hasShownFeedback = localStorage.getItem('heic_feedback_shown') === 'true';
+    }
+
+    showFeedbackModal() {
+        // Only show once per session
+        if (this.state.hasShownFeedback) return;
+        
+        const modal = document.getElementById('feedbackModal');
+        const input = modal?.querySelector('.modal-input');
+        
+        if (modal) {
+            modal.style.display = 'flex';
+            if (input) {
+                setTimeout(() => input.focus(), 300);
+            }
+        }
+    }
+
+    showThankYouModal() {
+        const modal = document.getElementById('thankYouModal');
+        if (modal) {
+            modal.style.display = 'flex';
+            // Auto-hide after 2.5 seconds
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 2500);
+        }
+    }
+
+    // ==========================================================================
+    // File Handling
+    // ==========================================================================
     handleFileSelect(fileList) {
         const heicFiles = Array.from(fileList).filter(f => {
             const ext = f.name.split('.').pop()?.toLowerCase();
@@ -251,6 +354,9 @@ class UIManager {
         }, 100);
     }
 
+    // ==========================================================================
+    // Conversion
+    // ==========================================================================
     async handleConvert() {
         const pending = this.state.getPendingFiles();
         if (!pending.length) {
@@ -266,8 +372,7 @@ class UIManager {
 
         try {
             const startTime = performance.now();
-            
-            // Convert all files client-side
+
             const results = await HeicConverter.convertAll(
                 pending,
                 this.state,
@@ -278,10 +383,9 @@ class UIManager {
 
             const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
             const successCount = results.filter(r => r.result.success).length;
-            
+
             console.log(`✅ ${successCount}/${count} converted in ${elapsed}s`);
 
-            // Update file states
             results.forEach(({ fileData, result }) => {
                 if (result.success) {
                     this.state.updateFile(fileData.id, {
@@ -300,16 +404,13 @@ class UIManager {
                 }
             });
 
-            // Create ZIP if multiple files
             if (successCount > 1) {
                 const successFiles = results
                     .filter(r => r.result.success)
                     .map(r => ({ name: r.result.name, blob: r.result.blob }));
-                
                 this.state.zipBlob = await HeicConverter.createZip(successFiles);
             }
 
-            // Update stats
             StatsStore.increment(successCount);
             this.updateStats();
 
@@ -326,6 +427,11 @@ class UIManager {
             }
 
             this.hideError();
+
+            // Show feedback modal after successful conversion
+            if (successCount > 0) {
+                setTimeout(() => this.showFeedbackModal(), 1500);
+            }
 
         } catch (error) {
             console.error('❌ Conversion failed:', error);
@@ -344,6 +450,9 @@ class UIManager {
         }
     }
 
+    // ==========================================================================
+    // Download
+    // ==========================================================================
     downloadBlob(blob, filename) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -363,6 +472,9 @@ class UIManager {
         }
     }
 
+    // ==========================================================================
+    // UI Helpers
+    // ==========================================================================
     updateStats() {
         this.elements.todayCount.textContent = StatsStore.getToday();
     }
@@ -391,6 +503,9 @@ class UIManager {
         return div.innerHTML;
     }
 
+    // ==========================================================================
+    // Render
+    // ==========================================================================
     render(files) {
         if (files.length) {
             this.elements.filesSection.style.display = 'block';
@@ -410,7 +525,7 @@ class UIManager {
 
         const successCount = files.filter(f => f.status === 'success').length;
         const showZip = successCount > 1 && this.state.zipBlob;
-        
+
         if (showZip) {
             this.elements.downloadAllSection.innerHTML = `
                 <div class="bulk-download-card">
@@ -489,9 +604,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (files.length) {
             e.preventDefault();
-            document.querySelector('#fileInput').files = null;
-            const event = new Event('change');
-            Object.defineProperty(event, 'target', { value: { files } });
+            const input = document.getElementById('fileInput');
+            const dt = new DataTransfer();
+            files.forEach(f => dt.items.add(f));
+            input.files = dt.files;
+            input.dispatchEvent(new Event('change'));
         }
     });
 });
