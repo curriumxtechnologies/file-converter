@@ -4,7 +4,7 @@ const API_BASE_URL = (() => {
     if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
         // Use the Render backend URL
         // REPLACE THIS with your actual Render URL after deployment
-        return 'https://file-converter-api.onrender.com';
+        return 'https://file-converter-api-iks5.onrender.com';
     }
     // Development
     return 'http://127.0.0.1:8000';
