@@ -7,23 +7,6 @@
       name="description"
       content="Free, unlimited HEIC to PNG converter. Convert iPhone photos instantly with no sign-up required."
     />
-    <meta
-      name="keywords"
-      content="HEIC to PNG, HEIC converter, PNG converter, iPhone photo converter, free HEIC converter"
-    />
-    <meta name="author" content="HEICtoPNG" />
-
-    <!-- Open Graph -->
-    <meta
-      property="og:title"
-      content="HEIC to PNG - Free Unlimited Converter"
-    />
-    <meta
-      property="og:description"
-      content="Convert HEIC images to PNG instantly. No sign-up, no limits, 100% free."
-    />
-    <meta property="og:type" content="website" />
-
     <title>HEIC to PNG — Free, Unlimited Converter</title>
     <link
       rel="icon"
@@ -37,6 +20,8 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+    <!-- HEIC conversion library - runs entirely in browser -->
+    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
   </head>
   <body>
     <header class="header">
@@ -52,7 +37,7 @@
                 stroke-linejoin="round"
               />
             </svg>
-            <span>HEIC to PNG</span>
+            <span>HEICtoPNG</span>
           </div>
           <div class="stats-badge" id="statsBadge">
             <span class="stat-number" id="todayCount">0</span>
@@ -64,15 +49,14 @@
 
     <main class="main">
       <div class="container">
-        <!-- Hero -->
         <section class="hero">
           <h1 class="hero-title">
             Convert HEIC to PNG
             <span class="accent-text">Instantly</span>
           </h1>
           <p class="hero-subtitle">
-            Free, unlimited, and no sign-up required. Convert your iPhone photos
-            to PNG in seconds.
+            Free, unlimited, and no sign-up required. All conversion happens in
+            your browser — files never leave your device.
           </p>
           <div class="features">
             <div class="feature">
@@ -124,12 +108,11 @@
                   stroke-linecap="round"
                 />
               </svg>
-              Privacy focused
+              100% Private — client-side
             </div>
           </div>
         </section>
 
-        <!-- Upload Zone -->
         <section class="upload-section">
           <div class="upload-zone" id="uploadZone">
             <div class="upload-zone-content">
@@ -159,7 +142,7 @@
                 <span class="upload-subtext">or click to browse</span>
               </p>
               <p class="upload-limit">
-                Max 50MB per file • Batch processing supported
+                Max 50MB per file • Batch processing • No server upload
               </p>
             </div>
             <input
@@ -172,7 +155,6 @@
           </div>
         </section>
 
-        <!-- Files List -->
         <section class="files-section" id="filesSection" style="display: none">
           <div class="files-header">
             <h2 class="files-title">Files (<span id="fileCount">0</span>)</h2>
@@ -206,13 +188,11 @@
           <div class="files-grid" id="filesGrid"></div>
         </section>
 
-        <!-- Download All Section -->
         <section
           class="download-all-section hidden"
           id="downloadAllSection"
         ></section>
 
-        <!-- Error Section -->
         <section class="error-section" id="errorSection" style="display: none">
           <div class="error-content">
             <div class="error-header">
@@ -248,8 +228,8 @@
     <footer class="footer">
       <div class="container">
         <p>
-          &copy; 2026 HEICtoPNG. All conversions processed in-memory. No files
-          stored on server.
+          &copy; 2026 HEICtoPNG. All conversions happen in your browser. No
+          files are ever uploaded to any server.
         </p>
       </div>
     </footer>

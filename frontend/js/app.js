@@ -1,16 +1,29 @@
-// Configuration
-const API_BASE_URL = (() => {
-    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        return 'https://file-converter-api-iks5.onrender.com';
-    }
-    return 'http://127.0.0.1:8000';
-})();
+// ============================================================================
+// HEIC to PNG Converter - 100% Client-Side
+// No server, no API, no uploads. Everything happens in your browser.
+// ============================================================================
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const BULK_DOWNLOAD_THRESHOLD = 5;
 
-console.log(`🔧 API: ${API_BASE_URL}`);
-console.log(`📦 Bulk download: ${BULK_DOWNLOAD_THRESHOLD}+ files = ZIP`);
+// Simple localStorage-based stats (no server needed)
+const StatsStore = {
+    getTodayKey() {
+        return `heic_stats_${new Date().toISOString().split('T')[0]}`;
+    },
+    increment(count) {
+        const key = this.getTodayKey();
+        const current = parseInt(localStorage.getItem(key) || '0');
+        localStorage.setItem(key, current + count);
+        return current + count;
+    },
+    getToday() {
+        return parseInt(localStorage.getItem(this.getTodayKey()) || '0');
+    }
+};
+
+console.log('🚀 HEIC to PNG Converter — Client Side');
+console.log('🔒 Files never leave your device');
 
 // ============================================================================
 // State Management
@@ -19,11 +32,11 @@ class AppState {
     constructor() {
         this.files = new Map();
         this.listeners = new Set();
-        this.batchZipBlob = null;
+        this.zipBlob = null;
     }
 
     addFile(file) {
-        const id = this.generateFileId(file);
+        const id = `${file.name}-${file.size}-${Date.now()}`;
         this.files.set(id, {
             id,
             file,
@@ -40,21 +53,15 @@ class AppState {
     }
 
     updateFile(id, updates) {
-        const fileData = this.files.get(id);
-        if (fileData) {
-            Object.assign(fileData, updates);
-            this.notify();
-        }
+        const fd = this.files.get(id);
+        if (fd) { Object.assign(fd, updates); this.notify(); }
     }
 
-    removeFile(id) {
-        this.files.delete(id);
-        this.notify();
-    }
+    removeFile(id) { this.files.delete(id); this.notify(); }
 
     clearAll() {
         this.files.clear();
-        this.batchZipBlob = null;
+        this.zipBlob = null;
         this.notify();
     }
 
@@ -63,153 +70,96 @@ class AppState {
     getPendingFiles() { return this.getAllFiles().filter(f => f.status === 'pending'); }
     getSuccessFiles() { return this.getAllFiles().filter(f => f.status === 'success'); }
 
-    subscribe(listener) {
-        this.listeners.add(listener);
-        return () => this.listeners.delete(listener);
+    subscribe(fn) {
+        this.listeners.add(fn);
+        return () => this.listeners.delete(fn);
     }
 
-    notify() {
-        this.listeners.forEach(listener => listener(this.getAllFiles()));
-    }
-
-    generateFileId(file) {
-        return `${file.name}-${file.size}-${file.lastModified}`;
-    }
+    notify() { this.listeners.forEach(fn => fn(this.getAllFiles())); }
 }
 
 // ============================================================================
-// API Client - Optimized for Render Free Tier
+// HEIC Converter - 100% Client-Side
 // ============================================================================
-class ApiClient {
-    // Force HTTP/1.1 to avoid QUIC protocol issues on Render
-    static async fetchWithRetry(url, options = {}, retries = 5) {
-        // Prevent HTTP/3 (QUIC) which is unstable on Render free tier
-        const fetchOptions = {
-            ...options,
-            // These headers don't directly control protocol but help
-            cache: 'no-store',
+class HeicConverter {
+    static async convertFile(file, fileId, state) {
+        console.log(`🔄 Converting: ${file.name}`);
+        state.updateFile(fileId, { status: 'converting', progress: 30 });
+
+        try {
+            const result = await heic2any({
+                blob: file,
+                toType: 'image/png',
+                quality: 1.0
+            });
+
+            const pngBlob = Array.isArray(result) ? result[0] : result;
+            const outputName = file.name.replace(/\.(heic|heif)$/i, '.png');
+
+            console.log(`✅ Done: ${outputName} (${(pngBlob.size / 1024).toFixed(1)}KB)`);
+
+            return {
+                success: true,
+                blob: pngBlob,
+                name: outputName,
+                size: pngBlob.size
+            };
+        } catch (error) {
+            console.error(`❌ Failed: ${file.name}`, error);
+            return {
+                success: false,
+                error: error.message || 'Conversion failed'
+            };
+        }
+    }
+
+    static async convertAll(files, state, updateProgress) {
+        const results = [];
+        let completed = 0;
+
+        // Process files in parallel with concurrency limit
+        const CONCURRENCY = navigator.hardwareConcurrency || 4;
+        const queue = [...files];
+        
+        const worker = async () => {
+            while (queue.length > 0) {
+                const fileData = queue.shift();
+                if (!fileData) break;
+                
+                const result = await this.convertFile(fileData.file, fileData.id, state);
+                results.push({ fileData, result });
+                completed++;
+                updateProgress(Math.round((completed / files.length) * 100));
+            }
         };
 
-        let lastError = null;
-
-        for (let attempt = 0; attempt <= retries; attempt++) {
-            try {
-                const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
-                
-                const response = await fetch(url, {
-                    ...fetchOptions,
-                    signal: controller.signal,
-                });
-                
-                clearTimeout(timeout);
-                return response;
-                
-            } catch (error) {
-                lastError = error;
-                
-                // Check if it's a retryable error
-                const retryable = 
-                    error.name === 'AbortError' ||
-                    error.message.includes('QUIC') ||
-                    error.message.includes('SUSPENDED') ||
-                    error.message.includes('PING_FAILED') ||
-                    error.message.includes('CONNECTION') ||
-                    error.message.includes('Failed to fetch') ||
-                    error.message.includes('NetworkError');
-
-                if (attempt < retries && retryable) {
-                    // Wait: 4s, 8s, 16s, 32s, 64s
-                    const waitTime = Math.min(4000 * Math.pow(2, attempt), 65000);
-                    console.log(`⏳ Server waking up... Retry ${attempt + 1}/${retries + 1} in ${waitTime/1000}s`);
-                    await new Promise(r => setTimeout(r, waitTime));
-                    continue;
-                }
-                throw error;
-            }
-        }
-        throw lastError;
+        // Start multiple workers
+        const workers = Array(Math.min(CONCURRENCY, files.length))
+            .fill(null)
+            .map(() => worker());
+        
+        await Promise.all(workers);
+        return results;
     }
 
-    static async uploadFiles(files) {
-        const formData = new FormData();
-        files.forEach(f => formData.append('files', f.file));
-
-        const endpoint = `${API_BASE_URL}/convert`;
-        console.log(`📤 Uploading ${files.length} file(s)...`);
-
-        const response = await this.fetchWithRetry(endpoint, {
-            method: 'POST',
-            body: formData,
+    static async createZip(files) {
+        const JSZip = await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');
+        const zip = new JSZip.default();
+        
+        const usedNames = new Set();
+        files.forEach(f => {
+            let name = f.name;
+            if (usedNames.has(name)) {
+                const base = name.replace('.png', '');
+                let counter = 1;
+                while (usedNames.has(`${base}_${counter}.png`)) counter++;
+                name = `${base}_${counter}.png`;
+            }
+            usedNames.add(name);
+            zip.file(name, f.blob);
         });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `Server error (${response.status})`);
-        }
-
-        const contentType = response.headers.get('Content-Type');
-        const contentDisposition = response.headers.get('Content-Disposition');
-        const blob = await response.blob();
-
-        console.log(`✅ Done: ${(blob.size / 1024).toFixed(1)} KB`);
-
-        if (contentType && contentType.includes('zip')) {
-            let filename = 'converted_images.zip';
-            if (contentDisposition) {
-                const match = contentDisposition.match(/filename="(.+)"/);
-                if (match) filename = match[1];
-            }
-            return { type: 'zip', blob, filename };
-        } else {
-            let filename = 'converted.png';
-            if (contentDisposition) {
-                const match = contentDisposition.match(/filename="(.+)"/);
-                if (match) filename = match[1];
-            }
-            return { type: 'single', blob, filename };
-        }
-    }
-
-    static async getStats() {
-        try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 8000);
-            
-            const res = await fetch(`${API_BASE_URL}/stats`, {
-                signal: controller.signal,
-                cache: 'no-store',
-            });
-            
-            clearTimeout(timeout);
-            
-            if (res.ok) return await res.json();
-        } catch (e) {
-            // Silent fail for stats
-        }
-        return null;
-    }
-
-    static async wakeUpServer() {
-        try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 30000);
-            
-            const res = await fetch(`${API_BASE_URL}/health`, {
-                signal: controller.signal,
-                cache: 'no-store',
-            });
-            
-            clearTimeout(timeout);
-            
-            if (res.ok) {
-                console.log('⚡ Server is awake');
-                return true;
-            }
-        } catch (e) {
-            console.log('💤 Server sleeping');
-        }
-        return false;
+        return await zip.generateAsync({ type: 'blob' });
     }
 }
 
@@ -219,15 +169,10 @@ class ApiClient {
 class UIManager {
     constructor(state) {
         this.state = state;
-        this.isConverting = false;
-        this.statsInterval = null;
         this.elements = this.cacheElements();
         this.initEventListeners();
         this.state.subscribe(this.render.bind(this));
-        this.loadStats();
-        this.statsInterval = setInterval(() => {
-            if (!this.isConverting) this.loadStats();
-        }, 120000); // Every 2 minutes
+        this.updateStats();
     }
 
     cacheElements() {
@@ -267,7 +212,7 @@ class UIManager {
         });
 
         this.elements.clearAllBtn.addEventListener('click', () => {
-            if (this.state.getAllFiles().length > 0 && confirm('Clear all files?')) {
+            if (this.state.getAllFiles().length && confirm('Clear all files?')) {
                 this.state.clearAll();
             }
         });
@@ -297,8 +242,13 @@ class UIManager {
             this.showError(`Files exceeding 50MB: ${oversized.map(f => f.name).join(', ')}`);
         }
 
-        heicFiles.filter(f => f.size <= MAX_FILE_SIZE).forEach(f => this.state.addFile(f));
+        heicFiles.filter(f => f.size <= MAX_FILE_SIZE)
+            .forEach(f => this.state.addFile(f));
         this.hideError();
+
+        setTimeout(() => {
+            this.elements.filesSection.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
     }
 
     async handleConvert() {
@@ -308,74 +258,82 @@ class UIManager {
             return;
         }
 
-        this.isConverting = true;
-        const fileCount = pending.length;
-
-        console.log(`🔄 Converting ${fileCount} file(s)...`);
+        const count = pending.length;
+        console.log(`🔄 Converting ${count} file(s)...`);
 
         this.elements.convertBtn.disabled = true;
-        this.elements.convertBtn.innerHTML = '<span class="spinner"></span> Connecting to server...';
-        
-        pending.forEach(f => this.state.updateFile(f.id, { status: 'converting', progress: 10 }));
-
-        // Update button text after 5 seconds to show we're still waiting
-        const waitingMessages = [
-            'Connecting to server...',
-            'Server waking up...',
-            'Almost there...',
-            'Processing...',
-        ];
-        let msgIndex = 0;
-        const msgInterval = setInterval(() => {
-            msgIndex = (msgIndex + 1) % waitingMessages.length;
-            if (this.elements.convertBtn.disabled) {
-                this.elements.convertBtn.innerHTML = `<span class="spinner"></span> ${waitingMessages[msgIndex]}`;
-            }
-        }, 8000);
+        this.elements.convertBtn.innerHTML = '<span class="spinner"></span> Converting...';
 
         try {
             const startTime = performance.now();
-            const result = await ApiClient.uploadFiles(pending);
-            clearInterval(msgInterval);
             
-            const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
-            console.log(`✅ Done in ${elapsed}s`);
-
-            if (result.type === 'single') {
-                this.state.updateFile(pending[0].id, {
-                    status: 'success', progress: 100,
-                    convertedBlob: result.blob,
-                    convertedName: result.filename,
-                    convertedSize: result.blob.size
-                });
-                setTimeout(() => this.downloadBlob(result.blob, result.filename), 500);
-            } else {
-                this.state.batchZipBlob = result.blob;
-                pending.forEach(f => {
-                    this.state.updateFile(f.id, {
-                        status: 'success', progress: 100,
-                        convertedBlob: result.blob,
-                        convertedName: result.filename,
-                        convertedSize: result.blob.size
-                    });
-                });
-                if (fileCount > BULK_DOWNLOAD_THRESHOLD) {
-                    setTimeout(() => this.downloadBlob(result.blob, result.filename), 800);
+            // Convert all files client-side
+            const results = await HeicConverter.convertAll(
+                pending,
+                this.state,
+                (progress) => {
+                    this.elements.convertBtn.innerHTML = `<span class="spinner"></span> ${progress}%`;
                 }
+            );
+
+            const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+            const successCount = results.filter(r => r.result.success).length;
+            
+            console.log(`✅ ${successCount}/${count} converted in ${elapsed}s`);
+
+            // Update file states
+            results.forEach(({ fileData, result }) => {
+                if (result.success) {
+                    this.state.updateFile(fileData.id, {
+                        status: 'success',
+                        progress: 100,
+                        convertedBlob: result.blob,
+                        convertedName: result.name,
+                        convertedSize: result.size
+                    });
+                } else {
+                    this.state.updateFile(fileData.id, {
+                        status: 'error',
+                        progress: 100,
+                        error: result.error
+                    });
+                }
+            });
+
+            // Create ZIP if multiple files
+            if (successCount > 1) {
+                const successFiles = results
+                    .filter(r => r.result.success)
+                    .map(r => ({ name: r.result.name, blob: r.result.blob }));
+                
+                this.state.zipBlob = await HeicConverter.createZip(successFiles);
+            }
+
+            // Update stats
+            StatsStore.increment(successCount);
+            this.updateStats();
+
+            // Auto-download
+            if (successCount === 1) {
+                const f = results.find(r => r.result.success);
+                if (f) {
+                    setTimeout(() => this.downloadBlob(f.result.blob, f.result.name), 500);
+                }
+            } else if (successCount > BULK_DOWNLOAD_THRESHOLD && this.state.zipBlob) {
+                setTimeout(() => {
+                    this.downloadBlob(this.state.zipBlob, `converted_${successCount}_images.zip`);
+                }, 800);
             }
 
             this.hideError();
 
         } catch (error) {
-            clearInterval(msgInterval);
-            console.error('❌ Failed:', error);
+            console.error('❌ Conversion failed:', error);
             pending.forEach(f => this.state.updateFile(f.id, {
-                status: 'error', progress: 100,
-                error: error.message || 'Conversion failed'
+                status: 'error', progress: 100, error: error.message
             }));
-            this.showError(error.message || 'Server is unavailable. Please try again in a minute.');
+            this.showError('Conversion failed. Please try again.');
         } finally {
-            clearInterval(msgInterval);
             this.elements.convertBtn.disabled = false;
             this.elements.convertBtn.innerHTML = `
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -383,8 +341,6 @@ class UIManager {
                 </svg>
                 Convert All
             `;
-            this.isConverting = false;
-            setTimeout(() => this.loadStats(), 3000);
         }
     }
 
@@ -401,38 +357,42 @@ class UIManager {
     }
 
     downloadAllAsZip() {
-        if (this.state.batchZipBlob) {
-            this.downloadBlob(this.state.batchZipBlob, `converted_${this.state.getSuccessFiles().length}_images.zip`);
+        if (this.state.zipBlob) {
+            const count = this.state.getSuccessFiles().length;
+            this.downloadBlob(this.state.zipBlob, `converted_${count}_images.zip`);
         }
+    }
+
+    updateStats() {
+        this.elements.todayCount.textContent = StatsStore.getToday();
     }
 
     showError(msg) {
         this.elements.errorMessage.textContent = msg;
         this.elements.errorSection.style.display = 'block';
         clearTimeout(this._errorTimeout);
-        this._errorTimeout = setTimeout(() => this.hideError(), 15000);
+        this._errorTimeout = setTimeout(() => this.hideError(), 10000);
     }
 
     hideError() {
         this.elements.errorSection.style.display = 'none';
     }
 
-    async loadStats() {
-        const stats = await ApiClient.getStats();
-        if (stats) {
-            this.elements.todayCount.textContent = stats.conversions_today || 0;
-        }
-    }
-
     formatFileSize(bytes) {
         if (!bytes) return '0 Bytes';
-        const units = ['Bytes', 'KB', 'MB', 'GB'];
+        const u = ['Bytes', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(1024));
-        return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + units[i];
+        return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + u[i];
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     render(files) {
-        if (files.length > 0) {
+        if (files.length) {
             this.elements.filesSection.style.display = 'block';
             this.elements.fileCount.textContent = files.length;
         } else {
@@ -449,19 +409,22 @@ class UIManager {
         });
 
         const successCount = files.filter(f => f.status === 'success').length;
-        if (successCount > 0 && this.state.batchZipBlob) {
+        const showZip = successCount > 1 && this.state.zipBlob;
+        
+        if (showZip) {
             this.elements.downloadAllSection.innerHTML = `
                 <div class="bulk-download-card">
-                    <div>
-                        <strong>📦 Batch Download Ready</strong>
-                        <p>${successCount} files converted</p>
-                    </div>
+                    <div><strong>📦 ${successCount} files ready</strong></div>
                     <button class="btn btn-primary btn-large" id="downloadAllBtn">
                         Download All as ZIP
                     </button>
                 </div>`;
             this.elements.downloadAllSection.classList.remove('hidden');
             document.getElementById('downloadAllBtn').onclick = () => this.downloadAllAsZip();
+        } else if (successCount > 0) {
+            this.elements.downloadAllSection.innerHTML = `
+                <p class="text-center text-gray-600 text-sm">✅ ${successCount} file(s) ready — click Download above</p>`;
+            this.elements.downloadAllSection.classList.remove('hidden');
         } else {
             this.elements.downloadAllSection.classList.add('hidden');
         }
@@ -471,14 +434,17 @@ class UIManager {
 
     renderFileItem(f) {
         const icons = { pending: '📄', converting: '⏳', success: '✅', error: '❌' };
-        const labels = { pending: 'Ready', converting: 'Waiting...', success: 'Done', error: 'Failed' };
-        const width = f.status === 'converting' ? '30%' : f.status !== 'pending' ? '100%' : '0%';
+        const labels = { pending: 'Ready', converting: 'Converting...', success: 'Done', error: 'Failed' };
+        const barClass = f.status === 'success' ? 'complete' : f.status === 'error' ? 'error' : '';
+        const width = f.status === 'converting' ? '50%' : f.status !== 'pending' ? '100%' : '0%';
 
         let action = '';
-        if (f.status === 'success' && this.state.getSuccessFiles().length <= BULK_DOWNLOAD_THRESHOLD) {
-            action = `<button class="btn btn-primary btn-small" id="dl-${f.id}">Download</button>`;
-        } else if (f.status === 'success') {
-            action = '<span class="badge badge-success">In ZIP</span>';
+        if (f.status === 'success') {
+            if (this.state.getSuccessFiles().length <= BULK_DOWNLOAD_THRESHOLD || !this.state.zipBlob) {
+                action = `<button class="btn btn-primary btn-small" id="dl-${f.id}">Download</button>`;
+            } else {
+                action = '<span class="badge badge-success">In ZIP</span>';
+            }
         } else if (f.status === 'error') {
             action = `<button class="btn btn-secondary btn-small" id="rm-${f.id}">✕</button>`;
         } else if (f.status === 'converting') {
@@ -495,16 +461,10 @@ class UIManager {
                         ${f.convertedSize ? `<span>→ ${this.formatFileSize(f.convertedSize)}</span>` : ''}
                         <span class="file-status ${f.status}">${labels[f.status]}</span>
                     </div>
-                    ${f.status !== 'pending' ? `<div class="file-progress"><div class="file-progress-bar" style="width:${width}"></div></div>` : ''}
+                    ${f.status !== 'pending' ? `<div class="file-progress"><div class="file-progress-bar ${barClass}" style="width:${width}"></div></div>` : ''}
                 </div>
                 <div class="file-actions">${action}</div>
             </div>`;
-    }
-
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
     }
 }
 
@@ -512,12 +472,9 @@ class UIManager {
 // Initialize
 // ============================================================================
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 HEIC to PNG Converter ready');
+    console.log('✅ Converter ready — No server needed');
     const state = new AppState();
-    const ui = new UIManager(state);
-
-    // Wake server in background
-    ApiClient.wakeUpServer();
+    new UIManager(state);
 
     document.addEventListener('paste', (e) => {
         const items = e.clipboardData?.items;
@@ -530,9 +487,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (ext === 'heic' || ext === 'heif') files.push(file);
             }
         }
-        if (files.length > 0) {
+        if (files.length) {
             e.preventDefault();
-            ui.handleFileSelect(files);
+            document.querySelector('#fileInput').files = null;
+            const event = new Event('change');
+            Object.defineProperty(event, 'target', { value: { files } });
         }
     });
 });
