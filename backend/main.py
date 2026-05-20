@@ -12,13 +12,16 @@ load_dotenv()
 
 # Allowed origins - production and local development
 ALLOWED_ORIGINS = [
-    "https://fileconverter.curriumx.online", 
-    "http://127.0.0.1:5500",                  
-    "http://localhost:5500"                  
+    "https://fileconverter.curriumx.online",
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+    "http://127.0.0.1:3000",
+    "http://localhost:3000"
 ]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Startup and shutdown events."""
     print("🚀 Starting HEIC Converter API...")
     print(f"🔒 Allowed origins: {ALLOWED_ORIGINS}")
     try:
@@ -36,7 +39,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS - Strict configuration with your origins
+# CORS - Strict configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -50,15 +53,20 @@ app.add_middleware(
         "X-Files-Converted",
         "X-Files-Failed"
     ],
-    max_age=3600  # Cache preflight requests for 1 hour
+    max_age=3600
 )
 
-# Cleanup middleware
+# Cleanup middleware - FIXED
 @app.middleware("http")
 async def cleanup_middleware(request, call_next):
-    response = await call_next
+    """Clean up after each request."""
+    # call_next is a function - call it with request
+    response = await call_next(request)
+    
+    # Force garbage collection after file uploads
     if request.url.path == "/convert":
         gc.collect()
+    
     return response
 
 app.include_router(convert_router)
@@ -83,4 +91,4 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "allowed_origins": ALLOWED_ORIGINS}
+    return {"status": "healthy"}
