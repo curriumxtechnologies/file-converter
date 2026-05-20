@@ -5,19 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Free, unlimited HEIC to PNG converter. No sign-up required. Convert your iPhone photos instantly."
+      content="Free, unlimited HEIC to PNG converter. Convert iPhone photos instantly with no sign-up required."
     />
+    <meta
+      name="keywords"
+      content="HEIC to PNG, HEIC converter, PNG converter, iPhone photo converter, free HEIC converter"
+    />
+    <meta name="author" content="HEICtoPNG" />
+
+    <!-- Open Graph -->
+    <meta
+      property="og:title"
+      content="HEIC to PNG - Free Unlimited Converter"
+    />
+    <meta
+      property="og:description"
+      content="Convert HEIC images to PNG instantly. No sign-up, no limits, 100% free."
+    />
+    <meta property="og:type" content="website" />
+
     <title>HEIC to PNG — Free, Unlimited Converter</title>
     <link
       rel="icon"
-      type="image/png"
-      href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAzklEQVR4nO2WsQrCMBCG/4sIBUFxEARxdnBx8RF8AN/CB3Bx8xF8AH0AH8DFxU1wEAQHQRwEQRAEQRAEQfAP3CUp1lpIoYP+8F3I5fLf0Uu4I6U8MzMzx0MA+AL4hAB+RkTBLQC+AIImEHr7KKq03pNWhJBB4AXgC+AN4GUSgU68JzQyEVwD+EUEfwDHL2MvB2TOn0BLCEEzAJ8IIR7AgWoz6S3cA2jqEwj0JWn7oCHbBqDiTzCpLYB5A9r/nQOnBbJsXYHOgPV78A1R5nf9N4SJhwAAAABJRU5ErkJggg=="
+      type="image/svg+xml"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼️</text></svg>"
     />
     <link rel="stylesheet" href="css/styles.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
   </head>
@@ -26,13 +43,7 @@
       <div class="container">
         <div class="header-content">
           <div class="logo">
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
               <path
                 d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"
                 stroke="#4F46E5"
@@ -45,7 +56,7 @@
           </div>
           <div class="stats-badge" id="statsBadge">
             <span class="stat-number" id="todayCount">0</span>
-            <span class="stat-label">conversions today</span>
+            <span class="stat-label">converted today</span>
           </div>
         </div>
       </div>
@@ -53,7 +64,7 @@
 
     <main class="main">
       <div class="container">
-        <!-- Hero Section -->
+        <!-- Hero -->
         <section class="hero">
           <h1 class="hero-title">
             Convert HEIC to PNG
@@ -118,7 +129,7 @@
           </div>
         </section>
 
-        <!-- Upload Section -->
+        <!-- Upload Zone -->
         <section class="upload-section">
           <div class="upload-zone" id="uploadZone">
             <div class="upload-zone-content">
@@ -147,7 +158,9 @@
                 <strong>Drag & drop</strong> your HEIC files here<br />
                 <span class="upload-subtext">or click to browse</span>
               </p>
-              <p class="upload-limit">Max 50MB per file</p>
+              <p class="upload-limit">
+                Max 50MB per file • Batch processing supported
+              </p>
             </div>
             <input
               type="file"
@@ -193,6 +206,12 @@
           <div class="files-grid" id="filesGrid"></div>
         </section>
 
+        <!-- Download All Section -->
+        <section
+          class="download-all-section hidden"
+          id="downloadAllSection"
+        ></section>
+
         <!-- Error Section -->
         <section class="error-section" id="errorSection" style="display: none">
           <div class="error-content">
@@ -228,7 +247,10 @@
 
     <footer class="footer">
       <div class="container">
-        <p>&copy; 2026 HEICtoPNG. All conversions are processed securely.</p>
+        <p>
+          &copy; 2026 HEICtoPNG. All conversions processed in-memory. No files
+          stored on server.
+        </p>
       </div>
     </footer>
 
