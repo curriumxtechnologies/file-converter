@@ -819,7 +819,7 @@ body {
 .footer-text {
   display: inline-flex;
   align-items: center;
-  gap: 0; /* Removes all space between the text and the logo */
+  gap: 0;
   justify-content: center;
   margin: 0;
 }
@@ -828,7 +828,4 @@ body {
   height: 1em;
   width: auto;
   display: inline-block;
-  /* Optional: If the logo image itself has built-in transparent padding on its left side, 
-     you can use a tiny negative margin to pull it even closer: */
-  /* margin-left: -2px; */
 }
