@@ -618,65 +618,6 @@ body {
     color: var(--color-primary);
 }
 
-/* Tab button styles */
-.tab-btn {
-    position: relative;
-    overflow: hidden;
-    transition: all 0.3s ease;
-}
-
-.tab-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.tab-btn:active {
-    transform: translateY(0);
-}
-
-.tab-btn.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-
-/* Tab content transitions */
-.tab-content {
-    opacity: 0;
-    transform: translateY(10px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.tab-content.active {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-/* Ripple animation */
-@keyframes ripple {
-    to {
-        transform: scale(4);
-        opacity: 0;
-    }
-}
-
-/* Modal transitions */
-.feedback-modal,
-.thank-you-modal {
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.feedback-modal[style*="display: flex"],
-.thank-you-modal[style*="display: flex"] {
-    opacity: 1;
-}
-
-/* Error section transition */
-.error-section {
-    transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
 /* Tab Content */
 .tab-content {
     display: none;
@@ -1080,4 +1021,77 @@ body {
     .stat-label {
         font-size: 0.625rem;
     }
+}
+
+/* Tab button styles */
+.tab-btn {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.tab-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.tab-btn:active {
+    transform: translateY(0);
+}
+
+.tab-btn.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+/* Tab content transitions */
+.tab-content {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.tab-content.active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Ripple animation */
+@keyframes ripple {
+    to {
+        transform: scale(4);
+        opacity: 0;
+    }
+}
+
+/* Modal transitions */
+.feedback-modal,
+.thank-you-modal {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.feedback-modal[style*="display: flex"],
+.thank-you-modal[style*="display: flex"] {
+    opacity: 1;
+}
+
+/* Error section transition */
+.error-section {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Tab content initial states - ADD THIS */
+.tab-content {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
 }

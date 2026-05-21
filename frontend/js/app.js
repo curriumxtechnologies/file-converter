@@ -52,7 +52,6 @@ window.App = {
     // Tabs with smooth transitions
     switchTab(tabName) {
         const tabs = document.querySelectorAll('.tab-btn');
-        const contents = document.querySelectorAll('.tab-content');
         
         // Get the currently active tab
         const currentActiveContent = document.querySelector('.tab-content.active');
@@ -119,7 +118,7 @@ window.App = {
         modal.style.display = 'flex';
         setTimeout(() => {
             modal.style.opacity = '1';
-            input?.focus();
+            if (input) input.focus();
         }, 50);
     },
 
@@ -128,6 +127,7 @@ window.App = {
         if (!modal) return;
         
         modal.style.display = 'flex';
+        modal.style.opacity = '1';
         setTimeout(() => { 
             modal.style.opacity = '0';
             setTimeout(() => {
@@ -169,58 +169,132 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('🔍 SharedArrayBuffer support:', typeof SharedArrayBuffer !== 'undefined');
     console.log('🔒 Cross-origin isolated:', window.crossOriginIsolated);
 
-    // Initialize tab content styles for transitions
+    // ========================================================================
+    // FIX: Properly initialize tab content visibility
+    // ========================================================================
     const tabContents = document.querySelectorAll('.tab-content');
+    let hasActiveContent = false;
+    
+    // First pass: apply base styles and check for active content
     tabContents.forEach(content => {
         content.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-        content.style.opacity = '0';
-        content.style.transform = 'translateY(10px)';
-        if (!content.classList.contains('active')) {
+        
+        if (content.classList.contains('active')) {
+            // Active tab should be visible
+            content.style.display = 'block';
+            content.style.opacity = '1';
+            content.style.transform = 'translateY(0)';
+            hasActiveContent = true;
+            console.log('Found active tab:', content.id);
+        } else {
+            // Inactive tabs start hidden
             content.style.display = 'none';
+            content.style.opacity = '0';
+            content.style.transform = 'translateY(10px)';
         }
     });
+    
+    // If no tab has active class, activate the first one
+    if (!hasActiveContent && tabContents.length > 0) {
+        const firstContent = tabContents[0];
+        firstContent.classList.add('active');
+        firstContent.style.display = 'block';
+        firstContent.style.opacity = '1';
+        firstContent.style.transform = 'translateY(0)';
+        console.log('No active tab found, activating first tab:', firstContent.id);
+        
+        // Also update corresponding tab button
+        const firstTabBtn = document.querySelector('.tab-btn');
+        if (firstTabBtn) {
+            firstTabBtn.classList.add('active');
+        }
+    }
 
+    // ========================================================================
     // Tab switching with smooth transitions
+    // ========================================================================
     const tabBtns = document.querySelectorAll('.tab-btn');
     console.log(`Found ${tabBtns.length} tab buttons`);
     
+    // Ripple effect function (defined here so it can access event)
+    function createRippleEffect(button, event) {
+        const ripple = document.createElement('span');
+        ripple.classList.add('ripple');
+        ripple.style.cssText = `
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(0);
+            animation: ripple 0.6s ease-out;
+            pointer-events: none;
+        `;
+        
+        const rect = button.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height);
+        ripple.style.width = ripple.style.height = `${size}px`;
+        ripple.style.left = `${event.clientX - rect.left - size / 2}px`;
+        ripple.style.top = `${event.clientY - rect.top - size / 2}px`;
+        
+        button.style.position = 'relative';
+        button.style.overflow = 'hidden';
+        button.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 600);
+    }
+    
     tabBtns.forEach(btn => {
-        // Add hover effect
         btn.style.transition = 'all 0.3s ease';
         
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (event) => {
             const tabName = btn.getAttribute('data-tab');
             console.log(`Tab clicked: ${tabName}`);
             
             // Add ripple effect
-            createRippleEffect(btn);
+            createRippleEffect(btn, event);
             
             App.switchTab(tabName);
         });
     });
     
-    // Restore last active tab with smooth transition
+    // Restore last active tab from localStorage
     const lastTab = localStorage.getItem('activeTab');
-    console.log(`Last tab: ${lastTab}`);
+    console.log(`Last tab from storage: ${lastTab}`);
+    
     if (lastTab && ['heic', 'video'].includes(lastTab)) {
-        // Small delay for smoother initial load
+        // Use setTimeout to ensure DOM is ready, but don't hide existing content
         setTimeout(() => {
             App.switchTab(lastTab);
-        }, 100);
+        }, 50);
     } else {
-        // Ensure HEIC tab is active by default
-        setTimeout(() => {
-            App.switchTab('heic');
-        }, 100);
+        // Ensure HEIC tab is active by default (only if not already active)
+        const activeTab = document.querySelector('.tab-content.active');
+        if (!activeTab || activeTab.id !== 'tab-heic') {
+            setTimeout(() => {
+                App.switchTab('heic');
+            }, 50);
+        }
     }
 
-    // Error close with fade
+    // ========================================================================
+    // Error handling with fade
+    // ========================================================================
     const errorCloseBtn = document.getElementById('errorCloseBtn');
     if (errorCloseBtn) {
         errorCloseBtn.addEventListener('click', () => App.hideError());
     }
+    
+    // Close error on click outside (optional)
+    const errorSection = document.getElementById('errorSection');
+    if (errorSection) {
+        errorSection.addEventListener('click', (e) => {
+            if (e.target === errorSection) {
+                App.hideError();
+            }
+        });
+    }
 
+    // ========================================================================
     // Feedback modal with smooth transitions
+    // ========================================================================
     const feedbackModal = document.getElementById('feedbackModal');
     const feedbackForm = document.getElementById('feedbackForm');
     const feedbackClose = document.getElementById('feedbackClose');
@@ -248,11 +322,12 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             try {
                 const formData = new FormData(feedbackForm);
-                await fetch(feedbackForm.action, {
+                const response = await fetch(feedbackForm.action, {
                     method: 'POST',
                     body: formData,
                     headers: { 'Accept': 'application/json' }
                 });
+                if (!response.ok) throw new Error('Network response was not ok');
             } catch (err) { 
                 console.warn('Feedback submission failed:', err);
             }
@@ -266,7 +341,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ========================================================================
     // Thank you modal
+    // ========================================================================
     const thankYouModal = document.getElementById('thankYouModal');
     if (thankYouModal) {
         thankYouModal.style.transition = 'opacity 0.3s ease';
@@ -280,64 +357,65 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Initialize Video Converter (from video-converter.js)
+    // ========================================================================
+    // Initialize Video Converter
+    // ========================================================================
     if (typeof initVideoConverter === 'function') {
         console.log('🎥 Initializing video converter...');
         initVideoConverter();
     } else {
         console.warn('Video converter not loaded yet, waiting...');
+        let attempts = 0;
         const checkVideoConverter = setInterval(() => {
+            attempts++;
             if (typeof initVideoConverter === 'function') {
                 clearInterval(checkVideoConverter);
                 initVideoConverter();
                 console.log('✅ Video converter initialized');
+            } else if (attempts >= 50) { // 5 seconds max
+                clearInterval(checkVideoConverter);
+                console.error('Video converter failed to load after 5 seconds');
             }
         }, 100);
-        
-        // Timeout after 5 seconds
-        setTimeout(() => {
-            clearInterval(checkVideoConverter);
-            if (typeof initVideoConverter !== 'function') {
-                console.error('Video converter failed to load');
-            }
-        }, 5000);
     }
 
+    // ========================================================================
     // Initialize HEIC Converter
+    // ========================================================================
     if (typeof HeicUIManager !== 'undefined' && typeof HeicAppState !== 'undefined') {
         const heicState = new HeicAppState();
         new HeicUIManager(heicState);
         console.log('✅ HEIC converter initialized');
+    } else {
+        console.warn('HEIC converter dependencies not found');
     }
 
-    // Update stats
+    // ========================================================================
+    // Update stats display
+    // ========================================================================
     const todayCountEl = document.getElementById('todayCount');
     if (todayCountEl) {
-        todayCountEl.textContent = window.StatsStore.getToday();
+        const todayCount = window.StatsStore.getToday();
+        todayCountEl.textContent = todayCount;
+        console.log(`📊 Today's conversions: ${todayCount}`);
     }
     
-    // Ripple effect function
-    function createRippleEffect(button) {
-        const ripple = document.createElement('span');
-        ripple.classList.add('ripple');
-        ripple.style.cssText = `
-            position: absolute;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.4);
-            transform: scale(0);
-            animation: ripple 0.6s ease-out;
-            pointer-events: none;
+    // ========================================================================
+    // Add CSS animation for ripple if not already present
+    // ========================================================================
+    if (!document.querySelector('#ripple-keyframes-style')) {
+        const style = document.createElement('style');
+        style.id = 'ripple-keyframes-style';
+        style.textContent = `
+            @keyframes ripple {
+                to {
+                    transform: scale(4);
+                    opacity: 0;
+                }
+            }
         `;
-        
-        const rect = button.getBoundingClientRect();
-        const size = Math.max(rect.width, rect.height);
-        ripple.style.width = ripple.style.height = `${size}px`;
-        ripple.style.left = `${event.clientX - rect.left - size / 2}px`;
-        ripple.style.top = `${event.clientY - rect.top - size / 2}px`;
-        
-        button.appendChild(ripple);
-        setTimeout(() => ripple.remove(), 600);
+        document.head.appendChild(style);
     }
     
-    console.log('✅ App initialized');
+    console.log('✅ App fully initialized');
 });
