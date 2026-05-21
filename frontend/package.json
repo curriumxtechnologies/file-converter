@@ -1,0 +1,16 @@
+{
+  "name": "file-converter-frontend",
+  "version": "1.0.0",
+  "description": "Free, unlimited file converter - HEIC to PNG, Video to MP3",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": ["file-converter", "heic-to-png", "video-to-mp3"],
+  "author": "Currium",
+  "license": "MIT",
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

@@ -1,8 +1,6 @@
-const CONFIG = {
-    API_URL: window.location.hostname === 'localhost' 
-        ? 'http://localhost:3000'  
-        : 'https://file-converter-api-mlns.onrender.com', 
-};
+// ============================================================================
+// File Converter - Main App (Frontend Only)
+// ============================================================================
 
 // Global state for converters
 window.App = {
@@ -91,21 +89,6 @@ window.App = {
         setTimeout(() => { 
             modal.style.display = 'none'; 
         }, 2500);
-    },
-    
-    // Check server status - Updated to use CONFIG.API_URL
-    async checkServerStatus() {
-        try {
-            const response = await fetch(`${CONFIG.API_URL}/api/status`);
-            if (response.ok) {
-                const data = await response.json();
-                console.log('Server status:', data);
-                return true;
-            }
-        } catch (error) {
-            console.warn('Server status check failed:', error);
-        }
-        return false;
     }
 };
 
@@ -136,14 +119,10 @@ window.StatsStore = {
 // ============================================================================
 // Initialize
 // ============================================================================
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 File Converter ready');
     console.log('🔍 SharedArrayBuffer support:', typeof SharedArrayBuffer !== 'undefined');
     console.log('🔒 Cross-origin isolated:', window.crossOriginIsolated);
-    console.log('🌐 API URL:', CONFIG.API_URL);
-    
-    // Check server status (optional - doesn't break anything if fails)
-    await App.checkServerStatus();
 
     // Tab switching
     const tabBtns = document.querySelectorAll('.tab-btn');
@@ -232,6 +211,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.error('Video converter failed to load');
             }
         }, 5000);
+    }
+
+    // Initialize HEIC Converter
+    if (typeof HeicUIManager !== 'undefined' && typeof HeicAppState !== 'undefined') {
+        const heicState = new HeicAppState();
+        new HeicUIManager(heicState);
+        console.log('✅ HEIC converter initialized');
     }
 
     // Update stats
