@@ -1,3 +1,51 @@
+// At the top of video-converter.js
+const { createFFmpeg, fetchFile } = FFmpeg;
+
+let ffmpeg = null;
+let isFFmpegLoaded = false;
+
+async function loadFFmpeg() {
+  if (isFFmpegLoaded) return ffmpeg;
+  
+  // Try multiple CDN sources
+  const cdnSources = [
+    'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
+    'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
+    'https://unpkg.com/@ffmpeg/core@0.9.0/dist/ffmpeg-core.js'
+  ];
+  
+  for (const corePath of cdnSources) {
+    try {
+      console.log(`Attempting to load FFmpeg from: ${corePath}`);
+      
+      ffmpeg = createFFmpeg({
+        log: true,
+        corePath: corePath,
+        // Disable worker for better compatibility
+        useWorker: false
+      });
+      
+      // Set timeout for loading
+      const loadPromise = ffmpeg.load();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('FFmpeg load timeout')), 30000)
+      );
+      
+      await Promise.race([loadPromise, timeoutPromise]);
+      
+      isFFmpegLoaded = true;
+      console.log('✅ FFmpeg loaded successfully from:', corePath);
+      return ffmpeg;
+      
+    } catch (error) {
+      console.warn(`Failed to load from ${corePath}:`, error.message);
+      // Continue to next CDN
+    }
+  }
+  
+  throw new Error('Failed to load FFmpeg from all CDN sources');
+}
+
 // ============================================================================
 // Video to MP3 Converter - FFmpeg.wasm v0.9.8
 // ============================================================================
