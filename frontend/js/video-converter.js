@@ -1,5 +1,5 @@
 // ============================================================================
-// Video to MP3 Converter - Client-Side with FFmpeg.wasm
+// Video to MP3 Converter - Client-Side with FFmpeg.wasm v0.11.6
 // Supports trimming: user selects start/end time, only that portion converts
 // ============================================================================
 
@@ -17,17 +17,22 @@ class VideoToMp3Converter {
         if (this.isLoaded) return true;
 
         try {
-            // Use the single-file version that doesn't need SharedArrayBuffer
-            const { createFFmpeg, fetchFile } = FFmpeg;
+            // FFmpeg.wasm v0.11.6 exposes createFFmpeg globally
+            const { createFFmpeg } = FFmpegWASM || window;
+            
+            if (!createFFmpeg) {
+                throw new Error('FFmpeg not available. Please check your internet connection.');
+            }
+
             this.ffmpeg = createFFmpeg({
                 log: false,
-                corePath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js',
+                corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
             });
 
-            // Don't show FFmpeg logs in console
+            // Suppress logs
             this.ffmpeg.setLogger(() => {});
 
-            // Set progress handler
+            // Progress handler
             this.ffmpeg.setProgress(({ ratio }) => {
                 const percent = Math.round(ratio * 100);
                 const progressBar = document.getElementById('videoProgressBar');
@@ -37,37 +42,42 @@ class VideoToMp3Converter {
                 if (progressBar) progressBar.style.width = percent + '%';
                 if (progressPercent) progressPercent.textContent = percent + '%';
                 if (progressText) {
-                    if (percent < 100) {
-                        progressText.textContent = 'Converting audio...';
-                    } else {
-                        progressText.textContent = 'Finalizing...';
-                    }
+                    progressText.textContent = percent < 100 ? 'Converting audio...' : 'Finalizing...';
                 }
             });
 
             await this.ffmpeg.load();
             this.isLoaded = true;
-            console.log('✅ FFmpeg loaded');
+            console.log('✅ FFmpeg loaded successfully');
             return true;
+
         } catch (error) {
             console.error('❌ Failed to load FFmpeg:', error);
-            throw new Error('Failed to load video converter. Please try a different browser or use Chrome.');
+            throw new Error(
+                'Video converter failed to load. This may be due to your browser settings. ' +
+                'Please try using Chrome, or check that you are not blocking third-party scripts.'
+            );
         }
     }
 
     async loadVideo(file) {
         this.videoFile = file;
 
-        // Get video duration
         return new Promise((resolve, reject) => {
             const video = document.createElement('video');
             video.preload = 'metadata';
+            
             video.onloadedmetadata = () => {
                 URL.revokeObjectURL(video.src);
                 this.videoDuration = video.duration;
                 resolve(video.duration);
             };
-            video.onerror = () => reject(new Error('Failed to load video'));
+            
+            video.onerror = () => {
+                URL.revokeObjectURL(video.src);
+                reject(new Error('Failed to load video. The file may be corrupted or unsupported.'));
+            };
+            
             video.src = URL.createObjectURL(file);
         });
     }
@@ -98,17 +108,19 @@ class VideoToMp3Converter {
         const ffmpeg = this.ffmpeg;
 
         try {
-            const inputFileName = 'input' + this.getFileExtension(this.videoFile.name);
-            const outputFileName = 'output.mp3';
+            const inputName = 'input' + this.getFileExtension(this.videoFile.name);
+            const outputName = 'output.mp3';
 
-            // Write input file to FFmpeg virtual filesystem
-            const fileData = await this.fetchFile(this.videoFile);
-            ffmpeg.FS('writeFile', inputFileName, fileData);
+            // Read file into Uint8Array
+            const fileData = await this.readFileAsUint8Array(this.videoFile);
+            
+            // Write to FFmpeg virtual filesystem
+            ffmpeg.FS('writeFile', inputName, fileData);
 
-            // Build FFmpeg arguments
+            // Build FFmpeg command
             const args = [];
-
-            // Trim options
+            
+            // Trim: -ss for start, -to for end (more accurate than -t)
             if (startTime > 0) {
                 args.push('-ss', startTime.toFixed(3));
             }
@@ -116,48 +128,53 @@ class VideoToMp3Converter {
                 args.push('-to', endTime.toFixed(3));
             }
 
+            // Conversion settings
             args.push(
-                '-i', inputFileName,
-                '-vn',              // No video stream
+                '-i', inputName,
+                '-vn',               // Drop video stream
                 '-acodec', 'libmp3lame',
-                '-ab', '192k',      // Audio bitrate
-                '-ar', '44100',     // Sample rate
-                '-ac', '2',         // Stereo
+                '-ab', '192k',
+                '-ar', '44100',
+                '-ac', '2',
                 '-f', 'mp3',
-                outputFileName
+                outputName
             );
 
-            console.log('🎬 FFmpeg args:', args.join(' '));
+            console.log('🎬 Converting with args:', args.join(' '));
+            console.log('⏱️ Trim:', startTime.toFixed(1) + 's', '→', endTime.toFixed(1) + 's');
 
-            // Execute conversion
+            // Execute
             await ffmpeg.run(...args);
 
-            // Read the output file
-            const outputData = ffmpeg.FS('readFile', outputFileName);
-            
-            // Create blob from Uint8Array
+            // Read output
+            const outputData = ffmpeg.FS('readFile', outputName);
             this.mp3Blob = new Blob([outputData.buffer], { type: 'audio/mpeg' });
 
-            // Cleanup
-            ffmpeg.FS('unlink', inputFileName);
-            ffmpeg.FS('unlink', outputFileName);
+            // Cleanup virtual filesystem
+            ffmpeg.FS('unlink', inputName);
+            ffmpeg.FS('unlink', outputName);
 
-            console.log(`✅ MP3 created: ${(this.mp3Blob.size / 1024).toFixed(1)} KB`);
+            console.log(`✅ MP3 ready: ${(this.mp3Blob.size / 1024).toFixed(1)} KB`);
             return this.mp3Blob;
 
         } catch (error) {
-            console.error('❌ Conversion failed:', error);
-            throw new Error('Video conversion failed. Please try a different video or browser.');
+            console.error('❌ Conversion error:', error);
+            
+            // Cleanup on error
+            try { ffmpeg.FS('unlink', inputName); } catch (e) {}
+            try { ffmpeg.FS('unlink', outputName); } catch (e) {}
+            
+            throw new Error('Video conversion failed. Please try a different video format (MP4 works best).');
         } finally {
             this.isConverting = false;
         }
     }
 
-    async fetchFile(file) {
+    readFileAsUint8Array(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => resolve(new Uint8Array(reader.result));
-            reader.onerror = reject;
+            reader.onerror = () => reject(new Error('Failed to read file'));
             reader.readAsArrayBuffer(file);
         });
     }
