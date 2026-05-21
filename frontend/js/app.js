@@ -73,8 +73,6 @@ const App = {
 // Initialize
 // ============================================================================
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 File Converter ready');
-
     // Tab switching
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => App.switchTab(btn.dataset.tab));
@@ -233,7 +231,6 @@ function initVideoConverter() {
         trimEndLabel.textContent = end.toFixed(1) + 's';
         trimDuration.textContent = (end - start).toFixed(1) + 's';
 
-        // Ensure start < end
         if (parseFloat(trimStart.value) >= parseFloat(trimEnd.value)) {
             trimStart.value = parseFloat(trimEnd.value) - 1;
         }
@@ -242,7 +239,6 @@ function initVideoConverter() {
     trimStart.addEventListener('input', updateTrimLabels);
     trimEnd.addEventListener('input', updateTrimLabels);
 
-    // Update video preview time when trimming
     trimStart.addEventListener('change', () => {
         videoPreview.currentTime = (parseFloat(trimStart.value) / 100) * currentDuration;
     });
@@ -250,7 +246,6 @@ function initVideoConverter() {
         videoPreview.currentTime = (parseFloat(trimEnd.value) / 100) * currentDuration;
     });
 
-    // Reset trim
     resetTrimBtn.addEventListener('click', () => {
         trimStart.value = 0;
         trimEnd.value = 100;
@@ -258,7 +253,6 @@ function initVideoConverter() {
         videoPreview.currentTime = 0;
     });
 
-    // Convert
     videoConvertBtn.addEventListener('click', async () => {
         if (!currentVideoFile) return;
         if (videoConverter.isConverting) return;
@@ -276,8 +270,6 @@ function initVideoConverter() {
             await videoConverter.loadVideo(currentVideoFile);
 
             const { startTime, endTime } = videoConverter.getTrimTimes();
-            console.log(`🎬 Trimming: ${startTime.toFixed(1)}s to ${endTime.toFixed(1)}s`);
-
             await videoConverter.convertToMp3(startTime, endTime);
 
             videoProgress.style.display = 'none';
@@ -287,7 +279,6 @@ function initVideoConverter() {
             document.getElementById('todayCount').textContent = StatsStore.getToday();
 
             setTimeout(() => App.showFeedbackModal(), 1500);
-
         } catch (error) {
             App.showError(error.message || 'Conversion failed.');
             videoProgress.style.display = 'none';
@@ -297,7 +288,6 @@ function initVideoConverter() {
         }
     });
 
-    // Download
     videoDownloadBtn.addEventListener('click', () => {
         if (videoConverter.mp3Blob) {
             const name = (currentVideoFile?.name || 'audio').replace(/\.[^.]+$/, '') + '.mp3';
@@ -305,7 +295,6 @@ function initVideoConverter() {
         }
     });
 
-    // Clear
     videoClearBtn.addEventListener('click', () => {
         currentVideoFile = null;
         videoPreview.src = '';
