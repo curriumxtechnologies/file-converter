@@ -523,11 +523,11 @@ body {
 }
 
 .footer-text {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0; 
+  justify-content: center;
+  margin: 0;
 }
 
 .footer-logo {
