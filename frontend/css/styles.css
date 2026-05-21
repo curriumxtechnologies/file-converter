@@ -829,3 +829,178 @@ body {
   width: auto;
   display: inline-block;
 }
+
+/* Tab Switcher */
+.tab-switcher {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border: 2px solid var(--color-gray-200);
+    border-radius: var(--border-radius-lg);
+    background: var(--color-white);
+    color: var(--color-gray-600);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.tab-btn:hover {
+    border-color: var(--color-primary-light);
+    color: var(--color-primary);
+}
+
+.tab-btn.active {
+    border-color: var(--color-primary);
+    background: var(--color-primary-bg);
+    color: var(--color-primary);
+}
+
+/* Tab Content */
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Video Section */
+.video-section {
+    background: var(--color-white);
+    border-radius: var(--border-radius-xl);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-md);
+    margin-top: 1.5rem;
+}
+
+.video-preview-container {
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+    background: #000;
+    margin-bottom: 1.5rem;
+}
+
+.video-player {
+    width: 100%;
+    max-height: 400px;
+    display: block;
+}
+
+/* Trim Controls */
+.trim-controls {
+    background: var(--color-gray-50);
+    border-radius: var(--border-radius-lg);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.trim-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.trim-subtitle {
+    font-size: 0.8125rem;
+    color: var(--color-gray-500);
+    margin-bottom: 1rem;
+}
+
+.trim-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.trim-range {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.trim-range label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-gray-700);
+}
+
+.trim-range input[type="range"] {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--color-gray-300);
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.trim-range input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    background: var(--color-primary);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid var(--color-white);
+    box-shadow: var(--shadow-sm);
+}
+
+.trim-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
+}
+
+/* Video Actions */
+.video-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+/* Conversion Progress */
+.conversion-progress {
+    background: var(--color-white);
+    padding: 1rem;
+    border-radius: var(--border-radius-md);
+    border: 1px solid var(--color-gray-200);
+    margin-bottom: 1rem;
+}
+
+.download-ready {
+    text-align: center;
+    margin-top: 1rem;
+}
+
+@media (max-width: 480px) {
+    .tab-btn {
+        flex: 1;
+        justify-content: center;
+        padding: 0.625rem 1rem;
+        font-size: 0.8125rem;
+    }
+    
+    .video-actions {
+        flex-direction: column;
+    }
+    
+    .video-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
