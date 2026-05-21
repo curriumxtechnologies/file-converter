@@ -815,3 +815,20 @@ body {
     50% { transform: scale(1.2); }
     100% { transform: scale(1); }
 }
+
+.footer-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 0; /* Removes all space between the text and the logo */
+  justify-content: center;
+  margin: 0;
+}
+
+.footer-logo {
+  height: 1em;
+  width: auto;
+  display: inline-block;
+  /* Optional: If the logo image itself has built-in transparent padding on its left side, 
+     you can use a tiny negative margin to pull it even closer: */
+  /* margin-left: -2px; */
+}
