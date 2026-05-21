@@ -553,7 +553,7 @@ function initVideoConverter() {
             
             try {
                 // Load FFmpeg
-                videoConvertBtn.innerHTML = '<span class="spinner"></span> Loading FFmpeg...';
+                videoConvertBtn.innerHTML = '<span class="spinner"></span> Loading...';
                 await videoConverter.loadFFmpeg();
                 
                 // Load video
