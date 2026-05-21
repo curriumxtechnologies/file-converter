@@ -210,7 +210,6 @@ class HeicUIManager {
 
             const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
             const successCount = results.filter(r => r.result.success).length;
-            console.log(`✅ ${successCount}/${count} converted in ${elapsed}s`);
 
             results.forEach(({ fileData, result }) => {
                 if (result.success) {
