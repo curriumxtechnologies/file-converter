@@ -165,9 +165,9 @@ window.StatsStore = {
 // Initialize
 // ============================================================================
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 File Converter ready');
-    console.log('🔍 SharedArrayBuffer support:', typeof SharedArrayBuffer !== 'undefined');
-    console.log('🔒 Cross-origin isolated:', window.crossOriginIsolated);
+    console.log('File Converter ready');
+    console.log('SharedArrayBuffer support:', typeof SharedArrayBuffer !== 'undefined');
+    console.log('Cross-origin isolated:', window.crossOriginIsolated);
 
     // ========================================================================
     // FIX: Properly initialize tab content visibility
@@ -361,7 +361,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize Video Converter
     // ========================================================================
     if (typeof initVideoConverter === 'function') {
-        console.log('🎥 Initializing video converter...');
+        console.log('Initializing video converter...');
         initVideoConverter();
     } else {
         console.warn('Video converter not loaded yet, waiting...');
@@ -371,7 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (typeof initVideoConverter === 'function') {
                 clearInterval(checkVideoConverter);
                 initVideoConverter();
-                console.log('✅ Video converter initialized');
+                console.log('Video converter initialized');
             } else if (attempts >= 50) { // 5 seconds max
                 clearInterval(checkVideoConverter);
                 console.error('Video converter failed to load after 5 seconds');
@@ -385,7 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof HeicUIManager !== 'undefined' && typeof HeicAppState !== 'undefined') {
         const heicState = new HeicAppState();
         new HeicUIManager(heicState);
-        console.log('✅ HEIC converter initialized');
+        console.log('HEIC converter initialized');
     } else {
         console.warn('HEIC converter dependencies not found');
     }
@@ -397,7 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (todayCountEl) {
         const todayCount = window.StatsStore.getToday();
         todayCountEl.textContent = todayCount;
-        console.log(`📊 Today's conversions: ${todayCount}`);
+        console.log(`Today's conversions: ${todayCount}`);
     }
     
     // ========================================================================
@@ -417,5 +417,5 @@ document.addEventListener('DOMContentLoaded', () => {
         document.head.appendChild(style);
     }
     
-    console.log('✅ App fully initialized');
+    console.log('App fully initialized');
 });

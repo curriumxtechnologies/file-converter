@@ -102,7 +102,7 @@ async function loadFFmpeg() {
       await Promise.race([loadPromise, timeoutPromise]);
       
       isFFmpegLoaded = true;
-      console.log(`✅ FFmpeg loaded successfully from: ${config.corePath}`);
+      console.log(`FFmpeg loaded successfully from: ${config.corePath}`);
       return ffmpeg;
       
     } catch (error) {
@@ -135,7 +135,7 @@ class VideoToMp3Converter {
         try {
             this.ffmpeg = await loadFFmpeg();
             this.isLoaded = true;
-            console.log('✅ Video converter ready');
+            console.log('Video converter ready');
             return true;
         } catch (error) {
             console.error('FFmpeg load failed:', error);
@@ -157,7 +157,7 @@ class VideoToMp3Converter {
             video.onloadedmetadata = () => {
                 URL.revokeObjectURL(url);
                 this.videoDuration = video.duration;
-                console.log(`📹 Video loaded: ${this.videoDuration.toFixed(2)}s, ${(file.size / 1024 / 1024).toFixed(2)} MB`);
+                console.log(`Video loaded: ${this.videoDuration.toFixed(2)}s, ${(file.size / 1024 / 1024).toFixed(2)} MB`);
                 resolve(this.videoDuration);
             };
             
@@ -224,7 +224,7 @@ class VideoToMp3Converter {
             if (progressText) progressText.textContent = 'Loading video...';
             
             // Read video file
-            console.log(`📥 Loading video: ${this.videoFile.name} (${(this.videoFile.size / 1024 / 1024).toFixed(2)} MB)`);
+            console.log(`Loading video: ${this.videoFile.name} (${(this.videoFile.size / 1024 / 1024).toFixed(2)} MB)`);
             const videoData = await this.videoFile.arrayBuffer();
             ff.FS('writeFile', inputFilename, new Uint8Array(videoData));
             
@@ -255,7 +255,7 @@ class VideoToMp3Converter {
                 outputFilename
             );
             
-            console.log('🎬 FFmpeg command:', command.join(' '));
+            console.log('FFmpeg command:', command.join(' '));
             
             // Update progress text
             if (progressText) progressText.textContent = 'Converting to MP3...';
@@ -264,7 +264,7 @@ class VideoToMp3Converter {
             await ff.run(...command);
             
             // Read output file
-            console.log('📤 Reading output file...');
+            console.log('Reading output file...');
             const outputData = ff.FS('readFile', outputFilename);
             this.mp3Blob = new Blob([outputData.buffer], { type: 'audio/mpeg' });
             
@@ -272,7 +272,7 @@ class VideoToMp3Converter {
             ff.FS('unlink', inputFilename);
             ff.FS('unlink', outputFilename);
             
-            console.log(`✅ Conversion complete: ${(this.mp3Blob.size / 1024).toFixed(0)} KB MP3`);
+            console.log(`Conversion complete: ${(this.mp3Blob.size / 1024).toFixed(0)} KB MP3`);
             return this.mp3Blob;
             
         } catch (error) {
@@ -341,7 +341,7 @@ if (typeof window !== 'undefined') {
 // Video Converter Initialization Function
 // ============================================================================
 function initVideoConverter() {
-    console.log('🎥 Initializing video converter...');
+    console.log('Initializing video converter...');
     
     // Get DOM elements with null checks
     const videoUploadZone = document.getElementById('videoUploadZone');
@@ -469,7 +469,7 @@ function initVideoConverter() {
                 if (trimStart) trimStart.value = 0;
                 updateTrimLabels();
                 
-                console.log(`📹 Video loaded: ${currentDuration.toFixed(2)} seconds`);
+                console.log(`Video loaded: ${currentDuration.toFixed(2)} seconds`);
             };
         }
         
@@ -562,7 +562,7 @@ function initVideoConverter() {
                 
                 // Get trim times
                 const { startTime, endTime } = videoConverter.getTrimTimes();
-                console.log(`🎬 Trimming: ${startTime.toFixed(1)}s → ${endTime.toFixed(1)}s (${(endTime - startTime).toFixed(1)}s duration)`);
+                console.log(`Trimming: ${startTime.toFixed(1)}s to ${endTime.toFixed(1)}s (${(endTime - startTime).toFixed(1)}s duration)`);
                 
                 // Convert
                 videoConvertBtn.innerHTML = '<span class="spinner"></span> Converting to MP3...';
@@ -598,7 +598,7 @@ function initVideoConverter() {
                     setTimeout(() => window.App.showFeedbackModal(), 1500);
                 }
                 
-                console.log('✅ Conversion completed successfully');
+                console.log('Conversion completed successfully');
                 
             } catch (error) {
                 console.error('Conversion failed:', error);
@@ -645,7 +645,7 @@ function initVideoConverter() {
         });
     }
     
-    console.log('✅ Video converter initialized');
+    console.log('Video converter initialized');
 }
 
 // Export for global use

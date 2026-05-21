@@ -367,7 +367,7 @@ class HeicUIManager {
                 setTimeout(() => window.App.showFeedbackModal(), 1500);
             }
             
-            console.log(`✅ Converted ${successCount}/${successCount + results.filter(r => !r.result.success).length} files in ${elapsed}s`);
+            console.log(`Converted ${successCount}/${successCount + results.filter(r => !r.result.success).length} files in ${elapsed}s`);
 
         } catch (error) {
             console.error('Batch conversion error:', error);
@@ -416,17 +416,28 @@ class HeicUIManager {
             if (successCount > 1 && this.state.zipBlob) {
                 this.elements.downloadAllSection.innerHTML = `
                     <div class="bulk-download-card">
-                        <div><strong>📦 ${successCount} files ready</strong></div>
+                        <div><strong><i data-lucide="package" width="18" height="18"></i> ${successCount} files ready</strong></div>
                         <button class="btn btn-primary btn-large" id="heicDownloadAllBtn">Download All as ZIP</button>
                     </div>`;
                 this.elements.downloadAllSection.classList.remove('hidden');
+                
+                // Initialize Lucide icons for newly added elements
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+                
                 const downloadBtn = document.getElementById('heicDownloadAllBtn');
                 if (downloadBtn && window.App) {
                     downloadBtn.onclick = () => window.App.downloadBlob(this.state.zipBlob, `converted_${successCount}_images.zip`);
                 }
             } else if (successCount > 0) {
-                this.elements.downloadAllSection.innerHTML = `<p class="text-center text-gray-600 text-sm">✅ ${successCount} file(s) ready</p>`;
+                this.elements.downloadAllSection.innerHTML = `<p class="text-center text-gray-600 text-sm"><i data-lucide="check-circle" width="16" height="16"></i> ${successCount} file(s) ready</p>`;
                 this.elements.downloadAllSection.classList.remove('hidden');
+                
+                // Initialize Lucide icons for newly added elements
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
             } else {
                 this.elements.downloadAllSection.classList.add('hidden');
             }
@@ -439,36 +450,57 @@ class HeicUIManager {
     }
 
     renderFileItem(f) {
-        const icons = { pending: '📄', converting: '⏳', success: '✅', error: '❌' };
-        const labels = { pending: 'Ready', converting: 'Converting...', success: 'Done', error: 'Failed' };
+        const icons = {
+            pending: 'file',
+            converting: 'loader-2',
+            success: 'check-circle',
+            error: 'alert-circle'
+        };
+        
+        const labels = { 
+            pending: 'Ready', 
+            converting: 'Converting...', 
+            success: 'Done', 
+            error: 'Failed' 
+        };
+        
+        const iconColors = {
+            pending: '#6B7280',
+            converting: '#F59E0B',
+            success: '#10B981',
+            error: '#EF4444'
+        };
+        
         const width = f.status === 'converting' ? '50%' : f.status !== 'pending' ? '100%' : '0%';
         
         let action = '';
         if (f.status === 'success') {
             const shouldShowIndividualDownload = this.state.getSuccessFiles().length <= BULK_DOWNLOAD_THRESHOLD || !this.state.zipBlob;
             if (shouldShowIndividualDownload) {
-                action = `<button class="btn btn-primary btn-small" id="dl-${f.id}">Download</button>`;
+                action = `<button class="btn btn-primary btn-small" id="dl-${f.id}"><i data-lucide="download" width="14" height="14"></i> Download</button>`;
             } else {
-                action = '<span class="badge badge-success">In ZIP</span>';
+                action = '<span class="badge badge-success"><i data-lucide="archive" width="14" height="14"></i> In ZIP</span>';
             }
         } else if (f.status === 'error') {
-            action = `<button class="btn btn-secondary btn-small" id="rm-${f.id}">✕</button>`;
+            action = `<button class="btn btn-secondary btn-small" id="rm-${f.id}"><i data-lucide="x" width="16" height="16"></i></button>`;
         } else if (f.status === 'converting') {
             action = '<span class="spinner"></span>';
         } else {
-            action = `<button class="btn btn-secondary btn-small" id="rm-${f.id}">✕</button>`;
+            action = `<button class="btn btn-secondary btn-small" id="rm-${f.id}"><i data-lucide="x" width="16" height="16"></i></button>`;
         }
         
-        const errorHtml = f.error ? `<div class="error-message">⚠️ ${window.App ? window.App.escapeHtml(f.error) : f.error}</div>` : '';
+        const errorHtml = f.error ? `<div class="error-message"><i data-lucide="alert-triangle" width="14" height="14"></i> ${window.App ? window.App.escapeHtml(f.error) : f.error}</div>` : '';
         
         return `
             <div class="file-item status-${f.status}">
-                <div class="file-icon">${icons[f.status]}</div>
+                <div class="file-icon">
+                    <i data-lucide="${icons[f.status]}" width="24" height="24" stroke="${iconColors[f.status]}"></i>
+                </div>
                 <div class="file-info">
                     <div class="file-name">${window.App ? window.App.escapeHtml(f.file.name) : f.file.name}</div>
                     <div class="file-meta">
                         <span>${window.App ? window.App.formatFileSize(f.originalSize) : f.originalSize} bytes</span>
-                        ${f.convertedSize ? `<span>→ ${window.App ? window.App.formatFileSize(f.convertedSize) : f.convertedSize} bytes</span>` : ''}
+                        ${f.convertedSize ? `<span><i data-lucide="arrow-right" width="12" height="12"></i> ${window.App ? window.App.formatFileSize(f.convertedSize) : f.convertedSize} bytes</span>` : ''}
                         <span class="file-status ${f.status}">${labels[f.status]}</span>
                     </div>
                     ${f.status !== 'pending' ? `<div class="file-progress"><div class="file-progress-bar" style="width:${width}"></div></div>` : ''}
