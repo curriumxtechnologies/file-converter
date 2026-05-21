@@ -5,9 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Free, unlimited file converter. Convert HEIC to PNG, Video to MP3 with trimming — all in your browser."
+      content="Free, unlimited file converter. Convert HEIC to PNG, Video to MP3 with trimming — all in your browser. No uploads, 100% private."
     />
-    <title>File Converter | Free, Unlimited</title>
+    <meta name="theme-color" content="#4F46E5" />
+    <meta name="author" content="Currium" />
+    <meta
+      name="keywords"
+      content="file converter, HEIC to PNG, video to MP3, free converter, online converter"
+    />
+
+    <!-- Open Graph / Social Media -->
+    <meta property="og:title" content="File Converter | Free, Unlimited" />
+    <meta
+      property="og:description"
+      content="Convert files instantly in your browser. No uploads, no sign-ups, 100% private."
+    />
+    <meta property="og:type" content="website" />
+
+    <title>File Converter | Free, Unlimited - HEIC to PNG & Video to MP3</title>
+
     <link
       rel="icon"
       type="image/svg+xml"
@@ -31,7 +47,7 @@
     <header class="header">
       <div class="container">
         <div class="header-content">
-          <div class="logo">
+          <div class="logo" aria-label="File Converter Logo">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
               <path
                 d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"
@@ -39,6 +55,7 @@
                 stroke-width="2"
                 stroke-linecap="round"
                 stroke-linejoin="round"
+                fill="none"
               />
             </svg>
             <span>FileConverter</span>
@@ -61,13 +78,17 @@
           </h1>
           <p class="hero-subtitle">
             Convert files instantly in your browser. No uploads, no sign-ups,
-            100% private.
+            100% private and secure.
           </p>
         </section>
 
         <!-- Tab Switcher -->
         <div class="tab-switcher">
-          <button class="tab-btn active" data-tab="heic">
+          <button
+            class="tab-btn active"
+            data-tab="heic"
+            aria-label="Convert HEIC to PNG"
+          >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <rect
                 x="3"
@@ -87,7 +108,11 @@
             </svg>
             HEIC to PNG
           </button>
-          <button class="tab-btn" data-tab="video">
+          <button
+            class="tab-btn"
+            data-tab="video"
+            aria-label="Convert Video to MP3"
+          >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" />
             </svg>
@@ -100,7 +125,13 @@
         <!-- ================================================================ -->
         <div class="tab-content active" id="tab-heic">
           <section class="upload-section">
-            <div class="upload-zone" id="heicUploadZone">
+            <div
+              class="upload-zone"
+              id="heicUploadZone"
+              role="button"
+              tabindex="0"
+              aria-label="Upload HEIC files"
+            >
               <div class="upload-zone-content">
                 <svg
                   class="upload-icon"
@@ -127,7 +158,9 @@
                   <strong>Drag & drop</strong> your HEIC files here<br />
                   <span class="upload-subtext">or click to browse</span>
                 </p>
-                <p class="upload-limit">Max 50MB per file • Batch processing</p>
+                <p class="upload-limit">
+                  Max 50MB per file • Batch processing • Convert to PNG
+                </p>
               </div>
               <input
                 type="file"
@@ -135,6 +168,7 @@
                 accept=".heic,.heif,.HEIC,.HEIF"
                 multiple
                 hidden
+                aria-label="Choose HEIC files"
               />
             </div>
           </section>
@@ -170,7 +204,13 @@
         <!-- ================================================================ -->
         <div class="tab-content" id="tab-video">
           <section class="upload-section">
-            <div class="upload-zone" id="videoUploadZone">
+            <div
+              class="upload-zone"
+              id="videoUploadZone"
+              role="button"
+              tabindex="0"
+              aria-label="Upload video file"
+            >
               <div class="upload-zone-content">
                 <svg
                   class="upload-icon"
@@ -192,13 +232,16 @@
                   <strong>Drag & drop</strong> your video here<br />
                   <span class="upload-subtext">or click to browse</span>
                 </p>
-                <p class="upload-limit">MP4, MOV, AVI, WebM • Max 200MB</p>
+                <p class="upload-limit">
+                  MP4, MOV, AVI, WebM, MKV • Max 200MB • Extract MP3 audio
+                </p>
               </div>
               <input
                 type="file"
                 id="videoFileInput"
-                accept="video/*,.mp4,.mov,.avi,.webm,.mkv"
+                accept="video/*,.mp4,.mov,.avi,.webm,.mkv,.m4v,.mpg,.mpeg"
                 hidden
+                aria-label="Choose video file"
               />
             </div>
           </section>
@@ -210,7 +253,14 @@
             style="display: none"
           >
             <div class="video-preview-container">
-              <video id="videoPreview" controls class="video-player"></video>
+              <video
+                id="videoPreview"
+                controls
+                class="video-player"
+                aria-label="Video preview"
+              >
+                <p>Your browser doesn't support HTML5 video.</p>
+              </video>
             </div>
 
             <!-- Trim Controls -->
@@ -224,7 +274,9 @@
 
               <div class="trim-sliders">
                 <div class="trim-range">
-                  <label>Start: <span id="trimStartLabel">0.0s</span></label>
+                  <label for="trimStart"
+                    >Start: <span id="trimStartLabel">0.0s</span></label
+                  >
                   <input
                     type="range"
                     id="trimStart"
@@ -232,10 +284,13 @@
                     max="100"
                     value="0"
                     step="0.1"
+                    aria-label="Trim start position"
                   />
                 </div>
                 <div class="trim-range">
-                  <label>End: <span id="trimEndLabel">0.0s</span></label>
+                  <label for="trimEnd"
+                    >End: <span id="trimEndLabel">0.0s</span></label
+                  >
                   <input
                     type="range"
                     id="trimEnd"
@@ -243,13 +298,18 @@
                     max="100"
                     value="100"
                     step="0.1"
+                    aria-label="Trim end position"
                   />
                 </div>
               </div>
 
               <div class="trim-info">
                 <span>Duration: <strong id="trimDuration">0.0s</strong></span>
-                <button class="btn btn-secondary btn-small" id="resetTrimBtn">
+                <button
+                  class="btn btn-secondary btn-small"
+                  id="resetTrimBtn"
+                  aria-label="Reset trim"
+                >
                   Reset Trim
                 </button>
               </div>
@@ -257,7 +317,11 @@
 
             <!-- Convert Button -->
             <div class="video-actions">
-              <button class="btn btn-primary btn-large" id="videoConvertBtn">
+              <button
+                class="btn btn-primary btn-large"
+                id="videoConvertBtn"
+                aria-label="Convert video to MP3"
+              >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                   <path
                     d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"
@@ -278,7 +342,11 @@
                 </svg>
                 Convert to MP3
               </button>
-              <button class="btn btn-secondary" id="videoClearBtn">
+              <button
+                class="btn btn-secondary"
+                id="videoClearBtn"
+                aria-label="Choose different video"
+              >
                 Choose Different Video
               </button>
             </div>
@@ -288,6 +356,9 @@
               class="conversion-progress"
               id="videoProgress"
               style="display: none"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="100"
             >
               <div class="progress-info">
                 <span id="videoProgressText">Converting...</span>
@@ -308,7 +379,11 @@
               id="videoDownloadReady"
               style="display: none"
             >
-              <button class="btn btn-primary btn-large" id="videoDownloadBtn">
+              <button
+                class="btn btn-primary btn-large"
+                id="videoDownloadBtn"
+                aria-label="Download MP3 file"
+              >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                   <path
                     d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"
@@ -325,7 +400,12 @@
         </div>
 
         <!-- Error Section -->
-        <section class="error-section" id="errorSection" style="display: none">
+        <section
+          class="error-section"
+          id="errorSection"
+          style="display: none"
+          role="alert"
+        >
           <div class="error-content">
             <div class="error-header">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -345,16 +425,34 @@
               </svg>
               <span id="errorMessage"></span>
             </div>
-            <button class="error-close" id="errorCloseBtn">&times;</button>
+            <button
+              class="error-close"
+              id="errorCloseBtn"
+              aria-label="Close error message"
+            >
+              &times;
+            </button>
           </div>
         </section>
       </div>
     </main>
 
     <!-- Feedback Modal -->
-    <div class="modal-overlay" id="feedbackModal" style="display: none">
+    <div
+      class="modal-overlay"
+      id="feedbackModal"
+      style="display: none"
+      role="dialog"
+      aria-modal="true"
+    >
       <div class="modal">
-        <button class="modal-close" id="feedbackClose">&times;</button>
+        <button
+          class="modal-close"
+          id="feedbackClose"
+          aria-label="Close feedback modal"
+        >
+          &times;
+        </button>
         <div class="modal-icon">💡</div>
         <h3 class="modal-title">What should we build next?</h3>
         <p class="modal-subtitle">
@@ -369,9 +467,10 @@
             type="text"
             name="suggestion"
             class="modal-input"
-            placeholder="PDF to PNG"
+            placeholder="PDF to PNG, Image to WebP, etc."
             required
             autocomplete="off"
+            aria-label="Your suggestion"
           />
           <button type="submit" class="btn btn-primary modal-btn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -390,23 +489,31 @@
     </div>
 
     <!-- Thank You Modal -->
-    <div class="modal-overlay" id="thankYouModal" style="display: none">
+    <div
+      class="modal-overlay"
+      id="thankYouModal"
+      style="display: none"
+      role="dialog"
+      aria-modal="true"
+    >
       <div class="modal modal-thanks">
         <div class="thanks-check">✅</div>
         <h3 class="modal-title">Thank you!</h3>
-        <p class="modal-subtitle">We appreciate your feedback.</p>
+        <p class="modal-subtitle">
+          We appreciate your feedback and will consider your suggestion.
+        </p>
       </div>
     </div>
 
     <footer class="footer">
       <div class="container">
         <p class="footer-text">
-          <span>&copy; 2026 files converter | Created by Currium</span
-          ><img src="images/logo.png" alt="X" class="footer-logo" />
+          <span>&copy; 2026 File Converter | Created by Currium</span>
         </p>
       </div>
     </footer>
 
+    <!-- Scripts - Load in correct order -->
     <script src="js/heic-converter.js"></script>
     <script src="js/video-converter.js"></script>
     <script src="js/app.js"></script>
