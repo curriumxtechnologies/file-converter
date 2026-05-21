@@ -27,7 +27,7 @@ const enableCORS = (res) => {
   const allowedOrigins = [
     'http://localhost:5500',
     'http://localhost:3000',
-    'https://your-frontend.onrender.com' // Replace with your actual frontend URL
+    'https://filesconverter.curriumx.online/' // Replace with your actual frontend URL
   ];
   const origin = process.env.FRONTEND_URL || 'https://your-frontend.onrender.com';
   res.setHeader("Access-Control-Allow-Origin", origin);
