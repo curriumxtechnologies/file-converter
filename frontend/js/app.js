@@ -73,6 +73,8 @@ const App = {
 // Initialize
 // ============================================================================
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 File Converter ready');
+
     // Tab switching
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => App.switchTab(btn.dataset.tab));
@@ -163,20 +165,26 @@ function initVideoConverter() {
     const videoProgress = document.getElementById('videoProgress');
     const videoDownloadReady = document.getElementById('videoDownloadReady');
     const videoDownloadBtn = document.getElementById('videoDownloadBtn');
-    const videoProgressText = document.getElementById('videoProgressText');
-    const videoProgressPercent = document.getElementById('videoProgressPercent');
     const videoProgressBar = document.getElementById('videoProgressBar');
+    const videoProgressPercent = document.getElementById('videoProgressPercent');
+    const videoProgressText = document.getElementById('videoProgressText');
 
     let currentVideoFile = null;
     let currentDuration = 0;
 
-    // Upload zone
+    // Store original button HTML
+    const originalBtnHTML = videoConvertBtn.innerHTML;
+
+    // Upload zone click
     videoUploadZone.addEventListener('click', () => videoFileInput.click());
+
+    // File input change
     videoFileInput.addEventListener('change', (e) => {
         if (e.target.files.length) loadVideoFile(e.target.files[0]);
         e.target.value = '';
     });
 
+    // Drag and drop
     ['dragover', 'dragleave', 'drop'].forEach(evt => {
         videoUploadZone.addEventListener(evt, (e) => {
             e.preventDefault();
@@ -190,12 +198,12 @@ function initVideoConverter() {
         });
     });
 
+    // Load video file
     function loadVideoFile(file) {
-        const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm', 'video/x-matroska'];
         const ext = file.name.split('.').pop()?.toLowerCase();
         const validExts = ['mp4', 'mov', 'avi', 'webm', 'mkv'];
 
-        if (!validExts.includes(ext) && !validTypes.includes(file.type)) {
+        if (!validExts.includes(ext)) {
             App.showError('Please select a video file (MP4, MOV, AVI, WebM, MKV).');
             return;
         }
@@ -216,6 +224,7 @@ function initVideoConverter() {
             currentDuration = videoPreview.duration;
             trimEnd.max = 100;
             trimEnd.value = 100;
+            trimStart.value = 0;
             updateTrimLabels();
         };
 
@@ -232,7 +241,7 @@ function initVideoConverter() {
         trimDuration.textContent = (end - start).toFixed(1) + 's';
 
         if (parseFloat(trimStart.value) >= parseFloat(trimEnd.value)) {
-            trimStart.value = parseFloat(trimEnd.value) - 1;
+            trimStart.value = Math.max(0, parseFloat(trimEnd.value) - 1);
         }
     }
 
@@ -246,6 +255,7 @@ function initVideoConverter() {
         videoPreview.currentTime = (parseFloat(trimEnd.value) / 100) * currentDuration;
     });
 
+    // Reset trim
     resetTrimBtn.addEventListener('click', () => {
         trimStart.value = 0;
         trimEnd.value = 100;
@@ -253,41 +263,60 @@ function initVideoConverter() {
         videoPreview.currentTime = 0;
     });
 
+    // Convert to MP3
     videoConvertBtn.addEventListener('click', async () => {
         if (!currentVideoFile) return;
         if (videoConverter.isConverting) return;
 
         videoConvertBtn.disabled = true;
-        videoConvertBtn.innerHTML = '<span class="spinner"></span> Converting...';
+        videoConvertBtn.innerHTML = '<span class="spinner"></span> Loading converter...';
         videoProgress.style.display = 'block';
         videoDownloadReady.style.display = 'none';
         videoProgressBar.style.width = '0%';
         videoProgressPercent.textContent = '0%';
-        videoProgressText.textContent = 'Loading converter...';
+        videoProgressText.textContent = 'Preparing...';
 
         try {
+            // Load FFmpeg
             await videoConverter.loadFFmpeg();
+
+            // Load video
+            videoConvertBtn.innerHTML = '<span class="spinner"></span> Processing video...';
             await videoConverter.loadVideo(currentVideoFile);
 
+            // Get trim times
             const { startTime, endTime } = videoConverter.getTrimTimes();
+            console.log(`🎬 Trimming: ${startTime.toFixed(1)}s → ${endTime.toFixed(1)}s`);
+
+            // Convert
+            videoConvertBtn.innerHTML = '<span class="spinner"></span> Converting to MP3...';
             await videoConverter.convertToMp3(startTime, endTime);
 
+            // Hide progress
             videoProgress.style.display = 'none';
             videoDownloadReady.style.display = 'block';
 
+            // ✅ AUTO-DOWNLOAD
+            const mp3Name = (currentVideoFile?.name || 'audio').replace(/\.[^.]+$/, '') + '.mp3';
+            App.downloadBlob(videoConverter.mp3Blob, mp3Name);
+
+            // Update stats
             StatsStore.increment(1);
             document.getElementById('todayCount').textContent = StatsStore.getToday();
 
+            // Show feedback modal after a delay
             setTimeout(() => App.showFeedbackModal(), 1500);
+
         } catch (error) {
-            App.showError(error.message || 'Conversion failed.');
+            App.showError(error.message || 'Conversion failed. Please try again.');
             videoProgress.style.display = 'none';
         } finally {
             videoConvertBtn.disabled = false;
-            videoConvertBtn.innerHTML = '🎤 Convert to MP3';
+            videoConvertBtn.innerHTML = originalBtnHTML;
         }
     });
 
+    // Manual download button (backup)
     videoDownloadBtn.addEventListener('click', () => {
         if (videoConverter.mp3Blob) {
             const name = (currentVideoFile?.name || 'audio').replace(/\.[^.]+$/, '') + '.mp3';
@@ -295,6 +324,7 @@ function initVideoConverter() {
         }
     });
 
+    // Clear / choose different video
     videoClearBtn.addEventListener('click', () => {
         currentVideoFile = null;
         videoPreview.src = '';
