@@ -1,271 +1,123 @@
 // ============================================================================
-// COMPLETE VIDEO CONVERTER WITH DEBUGGING FOR CHROME ANDROID
-// ============================================================================
-
-// ============================================================================
-// DEBUGGING SYSTEM
-// ============================================================================
-
-const DEBUG_VIDEO = true;
-
-// Create debug panel if it doesn't exist
-function ensureDebugPanel() {
-    let debugPanel = document.getElementById('video-debug-panel');
-    if (!debugPanel && document.body) {
-        debugPanel = document.createElement('div');
-        debugPanel.id = 'video-debug-panel';
-        debugPanel.style.cssText = `
-            position: fixed;
-            bottom: 10px;
-            right: 10px;
-            width: 350px;
-            max-width: 90vw;
-            background: rgba(0,0,0,0.95);
-            color: #0f0;
-            font-family: 'Courier New', monospace;
-            font-size: 10px;
-            padding: 10px;
-            border-radius: 8px;
-            z-index: 10000;
-            border: 1px solid #0f0;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            pointer-events: auto;
-            max-height: 300px;
-            overflow-y: auto;
-            display: none;
-        `;
-        
-        const header = document.createElement('div');
-        header.style.cssText = 'display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid #0f0; padding-bottom: 4px;';
-        header.innerHTML = `
-            <strong>🐛 VIDEO DEBUGGER</strong>
-            <button id="closeDebugPanel" style="background: none; border: none; color: #0f0; cursor: pointer; font-size: 14px;">✕</button>
-        `;
-        debugPanel.appendChild(header);
-        
-        const content = document.createElement('div');
-        content.id = 'video-debug-content';
-        debugPanel.appendChild(content);
-        
-        const footer = document.createElement('div');
-        footer.style.cssText = 'margin-top: 8px; font-size: 8px; color: #666; border-top: 1px solid #333; padding-top: 4px;';
-        footer.innerHTML = 'Tap logo 5x to show/hide | 3G may take 2-3 min';
-        debugPanel.appendChild(footer);
-        
-        document.body.appendChild(debugPanel);
-        
-        document.getElementById('closeDebugPanel')?.addEventListener('click', () => {
-            debugPanel.style.display = 'none';
-        });
-    }
-    return document.getElementById('video-debug-panel');
-}
-
-function videoDebugLog(message, type = 'info') {
-    if (!DEBUG_VIDEO) return;
-    
-    const timestamp = new Date().toLocaleTimeString();
-    const logEntry = `[${timestamp}] ${message}`;
-    console.log(`🎥 ${logEntry}`);
-    
-    // Add to visible panel
-    const panel = document.getElementById('video-debug-panel');
-    const content = document.getElementById('video-debug-content');
-    if (panel && content && panel.style.display !== 'none') {
-        const div = document.createElement('div');
-        div.style.cssText = 'border-bottom: 1px solid #333; padding: 3px 0; word-wrap: break-word;';
-        if (type === 'error') div.style.color = '#ff6b6b';
-        else if (type === 'success') div.style.color = '#51cf66';
-        else if (type === 'warning') div.style.color = '#ffd43b';
-        div.textContent = logEntry;
-        content.appendChild(div);
-        content.scrollTop = content.scrollHeight;
-        
-        // Keep only last 30 messages
-        while (content.children.length > 30) {
-            content.removeChild(content.firstChild);
-        }
-    }
-}
-
-// Toggle debug panel with 5 taps on logo
-let debugTapCount = 0;
-let debugTapTimer = null;
-
-function initDebugPanelTrigger() {
-    const checkLogo = setInterval(() => {
-        const logo = document.querySelector('.logo');
-        if (logo) {
-            clearInterval(checkLogo);
-            logo.addEventListener('click', () => {
-                debugTapCount++;
-                clearTimeout(debugTapTimer);
-                debugTapTimer = setTimeout(() => { debugTapCount = 0; }, 1000);
-                
-                if (debugTapCount === 5) {
-                    const panel = document.getElementById('video-debug-panel');
-                    if (panel) {
-                        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-                        if (panel.style.display === 'block') {
-                            videoDebugLog('Debug panel opened', 'success');
-                        }
-                    } else {
-                        const newPanel = ensureDebugPanel();
-                        newPanel.style.display = 'block';
-                    }
-                    debugTapCount = 0;
-                }
-            });
-        }
-    }, 100);
-}
-
-// ============================================================================
-// FFMPEG LOADER WITH MULTIPLE FALLBACKS
+// Video to MP3 Converter - FFmpeg.wasm
 // ============================================================================
 
 let ffmpeg = null;
 let isFFmpegLoaded = false;
 
+// Helper function to load FFmpeg with retry logic
 async function loadFFmpeg() {
-    videoDebugLog('=== Starting FFmpeg loader ===');
-    videoDebugLog(`User Agent: ${navigator.userAgent.substring(0, 80)}`);
-    videoDebugLog(`URL: ${window.location.href}`);
-    
-    if (isFFmpegLoaded && ffmpeg) {
-        videoDebugLog('FFmpeg already loaded', 'success');
-        return ffmpeg;
+  if (isFFmpegLoaded && ffmpeg) return ffmpeg;
+  
+  // Check SharedArrayBuffer support
+  if (typeof SharedArrayBuffer === 'undefined') {
+    throw new Error('SharedArrayBuffer not available. Please ensure you are accessing via localhost with proper COOP/COEP headers.');
+  }
+  
+  // Try multiple CDN sources and configurations
+  const configs = [
+    // FFmpeg 0.10.0 (latest stable)
+    {
+      corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
+      useWorker: false,
+      version: '0.10.0'
+    },
+    {
+      corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
+      useWorker: false,
+      version: '0.10.0 (jsdelivr)'
+    },
+    // FFmpeg 0.9.0 (fallback)
+    {
+      corePath: 'https://unpkg.com/@ffmpeg/core@0.9.0/dist/ffmpeg-core.js',
+      useWorker: false,
+      version: '0.9.0'
+    },
+    {
+      corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.9.0/dist/ffmpeg-core.js',
+      useWorker: false,
+      version: '0.9.0 (jsdelivr)'
+    },
+    // Try with worker enabled as last resort
+    {
+      corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
+      useWorker: true,
+      version: '0.10.0 (worker)'
     }
-    
-    // Check SharedArrayBuffer
-    videoDebugLog('Checking SharedArrayBuffer...');
-    if (typeof SharedArrayBuffer === 'undefined') {
-        const errorMsg = 'SharedArrayBuffer NOT available. Video conversion requires COOP/COEP headers.';
-        videoDebugLog(errorMsg, 'error');
-        videoDebugLog('Fix: Use Node.js server with headers (see server.js)', 'warning');
-        throw new Error(errorMsg + ' Use the Node.js server with proper headers.');
-    }
-    videoDebugLog('✅ SharedArrayBuffer available', 'success');
-    
-    // Check network
-    if (navigator.connection) {
-        videoDebugLog(`Network: ${navigator.connection.effectiveType}, ${navigator.connection.downlink} Mbps`);
-        if (navigator.connection.effectiveType === '3g') {
-            videoDebugLog('⚠️ 3G detected - download may take 2-3 minutes', 'warning');
+  ];
+  
+  for (const config of configs) {
+    try {
+      console.log(`Attempting to load FFmpeg from: ${config.corePath} (${config.version})`);
+      
+      // Get createFFmpeg function
+      let createFFmpeg = window.createFFmpeg;
+      if (!createFFmpeg && window.FFmpeg) {
+        createFFmpeg = window.FFmpeg.createFFmpeg;
+      }
+      if (!createFFmpeg && window.FFmpeg && typeof window.FFmpeg === 'object') {
+        createFFmpeg = window.FFmpeg.default?.createFFmpeg || window.FFmpeg.createFFmpeg;
+      }
+      
+      if (!createFFmpeg) {
+        throw new Error('createFFmpeg not found on window');
+      }
+      
+      ffmpeg = createFFmpeg({
+        log: true,
+        corePath: config.corePath,
+        useWorker: config.useWorker
+      });
+      
+      // Set up logging
+      ffmpeg.setLogger(({ type, message }) => {
+        if (type === 'error') console.error('FFmpeg:', message);
+        else if (type === 'info') console.log('FFmpeg:', message);
+      });
+      
+      // Set progress callback
+      ffmpeg.setProgress(({ ratio, time }) => {
+        const percent = Math.round(ratio * 100);
+        const progressBar = document.getElementById('videoProgressBar');
+        const progressPercent = document.getElementById('videoProgressPercent');
+        const progressText = document.getElementById('videoProgressText');
+        
+        if (progressBar) progressBar.style.width = `${percent}%`;
+        if (progressPercent) progressPercent.textContent = `${percent}%`;
+        if (progressText) {
+          if (percent < 100) {
+            progressText.textContent = `Converting... ${percent}%`;
+          } else {
+            progressText.textContent = 'Finalizing...';
+          }
         }
+      });
+      
+      // Set timeout for loading
+      const loadPromise = ffmpeg.load();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('FFmpeg load timeout (30s)')), 30000)
+      );
+      
+      await Promise.race([loadPromise, timeoutPromise]);
+      
+      isFFmpegLoaded = true;
+      console.log(`FFmpeg loaded successfully from: ${config.corePath}`);
+      return ffmpeg;
+      
+    } catch (error) {
+      console.warn(`Failed to load from ${config.corePath}:`, error.message);
+      ffmpeg = null;
+      // Continue to next config
     }
-    
-    // Try multiple configurations
-    const configs = [
-        {
-            corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
-            useWorker: false,
-            name: 'unpkg v0.10.0'
-        },
-        {
-            corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
-            useWorker: false,
-            name: 'jsdelivr v0.10.0'
-        },
-        {
-            corePath: 'https://unpkg.com/@ffmpeg/core@0.9.0/dist/ffmpeg-core.js',
-            useWorker: false,
-            name: 'unpkg v0.9.0'
-        },
-        {
-            corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.9.0/dist/ffmpeg-core.js',
-            useWorker: true,
-            name: 'jsdelivr v0.9.0 (worker)'
-        }
-    ];
-    
-    let lastError = null;
-    
-    for (const config of configs) {
-        try {
-            videoDebugLog(`\n📥 Trying: ${config.name}`);
-            videoDebugLog(`Core path: ${config.corePath.substring(0, 60)}...`);
-            
-            // Get createFFmpeg function
-            let createFFmpeg = window.createFFmpeg;
-            if (!createFFmpeg && window.FFmpeg) {
-                createFFmpeg = window.FFmpeg.createFFmpeg;
-            }
-            if (!createFFmpeg && window.FFmpeg?.default?.createFFmpeg) {
-                createFFmpeg = window.FFmpeg.default.createFFmpeg;
-            }
-            
-            if (!createFFmpeg) {
-                throw new Error('createFFmpeg not found');
-            }
-            
-            ffmpeg = createFFmpeg({
-                log: true,
-                corePath: config.corePath,
-                useWorker: config.useWorker
-            });
-            
-            // Progress callback for download
-            ffmpeg.setProgress(({ ratio }) => {
-                const percent = Math.round(ratio * 100);
-                if (percent % 20 === 0 && percent < 100) {
-                    videoDebugLog(`Download progress: ${percent}%`);
-                }
-                updateFFmpegLoadProgress(percent);
-            });
-            
-            // Logger
-            ffmpeg.setLogger(({ type, message }) => {
-                if (type === 'info' && (message.includes('fetch') || message.includes('download'))) {
-                    videoDebugLog(`FFmpeg: ${message.substring(0, 80)}`);
-                } else if (type === 'error') {
-                    videoDebugLog(`FFmpeg error: ${message}`, 'error');
-                }
-            });
-            
-            videoDebugLog(`Loading FFmpeg core (may take 30-60s on 3G)...`);
-            const loadStart = Date.now();
-            
-            // Load with timeout
-            const loadPromise = ffmpeg.load();
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout after 60 seconds')), 60000)
-            );
-            
-            await Promise.race([loadPromise, timeoutPromise]);
-            const loadTime = (Date.now() - loadStart) / 1000;
-            
-            videoDebugLog(`✅ FFmpeg loaded in ${loadTime}s from ${config.name}`, 'success');
-            isFFmpegLoaded = true;
-            return ffmpeg;
-            
-        } catch (error) {
-            videoDebugLog(`❌ Failed: ${config.name} - ${error.message}`, 'error');
-            lastError = error;
-            ffmpeg = null;
-        }
-    }
-    
-    videoDebugLog('=== ALL FFMPEG LOAD ATTEMPTS FAILED ===', 'error');
-    throw new Error('Video converter unavailable. Please check your internet connection and ensure COOP/COEP headers are set.');
-}
-
-function updateFFmpegLoadProgress(percent) {
-    const progressBar = document.getElementById('videoProgressBar');
-    const progressPercent = document.getElementById('videoProgressPercent');
-    const progressText = document.getElementById('videoProgressText');
-    
-    if (progressBar) progressBar.style.width = `${percent}%`;
-    if (progressPercent) progressPercent.textContent = `${percent}%`;
-    if (progressText && percent < 100) {
-        progressText.textContent = `Downloading converter... ${percent}% (may take 2-3 min on 3G)`;
-    }
+  }
+  
+  throw new Error('Failed to load FFmpeg from all CDN sources. Please check your internet connection and try again.');
 }
 
 // ============================================================================
-// VIDEO TO MP3 CONVERTER CLASS
+// Video to MP3 Converter Class
 // ============================================================================
-
 class VideoToMp3Converter {
     constructor() {
         this.ffmpeg = null;
@@ -274,46 +126,50 @@ class VideoToMp3Converter {
         this.mp3Blob = null;
         this.isLoaded = false;
         this.isConverting = false;
+        this.progressCallback = null;
     }
-    
+
     async loadFFmpeg() {
         if (this.isLoaded && this.ffmpeg) return true;
+
         try {
             this.ffmpeg = await loadFFmpeg();
             this.isLoaded = true;
-            videoDebugLog('Converter ready for use', 'success');
+            console.log('Video converter ready');
             return true;
         } catch (error) {
-            videoDebugLog(`Load failed: ${error.message}`, 'error');
-            throw error;
+            console.error('FFmpeg load failed:', error);
+            const errorMsg = error.message || 'Converter unavailable. Please ensure you are using localhost with HTTPS or a modern browser.';
+            throw new Error(errorMsg);
         }
     }
-    
+
     async loadVideo(file) {
-        if (!file) throw new Error('No video file');
-        this.videoFile = file;
+        if (!file) throw new Error('No video file provided');
         
+        this.videoFile = file;
         return new Promise((resolve, reject) => {
             const video = document.createElement('video');
             video.preload = 'metadata';
+            
             const url = URL.createObjectURL(file);
             
             video.onloadedmetadata = () => {
                 URL.revokeObjectURL(url);
                 this.videoDuration = video.duration;
-                videoDebugLog(`Video loaded: ${this.videoDuration.toFixed(1)}s, ${(file.size / 1024 / 1024).toFixed(1)}MB`, 'success');
+                console.log(`Video loaded: ${this.videoDuration.toFixed(2)}s, ${(file.size / 1024 / 1024).toFixed(2)} MB`);
                 resolve(this.videoDuration);
             };
             
             video.onerror = () => {
                 URL.revokeObjectURL(url);
-                reject(new Error('Cannot read video file'));
+                reject(new Error('Cannot read video file. The file may be corrupted or unsupported.'));
             };
             
             video.src = url;
         });
     }
-    
+
     getTrimTimes() {
         const startSlider = document.getElementById('trimStart');
         const endSlider = document.getElementById('trimEnd');
@@ -321,256 +177,414 @@ class VideoToMp3Converter {
         let startPercent = startSlider ? parseFloat(startSlider.value) : 0;
         let endPercent = endSlider ? parseFloat(endSlider.value) : 100;
         
+        // Validate values
         if (isNaN(startPercent)) startPercent = 0;
         if (isNaN(endPercent)) endPercent = 100;
-        if (startPercent >= endPercent) endPercent = Math.min(startPercent + 5, 100);
+        
+        // Ensure start < end
+        if (startPercent >= endPercent) {
+            endPercent = Math.min(startPercent + 5, 100);
+            if (endSlider) endSlider.value = endPercent;
+        }
         
         let startTime = (startPercent / 100) * this.videoDuration;
         let endTime = (endPercent / 100) * this.videoDuration;
-        if (endTime - startTime < 1) endTime = Math.min(startTime + 1, this.videoDuration);
+        
+        // Ensure minimum duration of 1 second
+        if (endTime - startTime < 1) {
+            endTime = Math.min(startTime + 1, this.videoDuration);
+        }
         
         return { startTime, endTime };
     }
-    
+
     async convertToMp3(startTime, endTime) {
-        if (!this.isLoaded) await this.loadFFmpeg();
-        if (!this.videoFile) throw new Error('No video loaded');
-        if (this.isConverting) throw new Error('Conversion in progress');
+        if (!this.isLoaded) {
+            await this.loadFFmpeg();
+        }
+        
+        if (!this.videoFile) {
+            throw new Error('No video file loaded');
+        }
+        
+        if (this.isConverting) {
+            throw new Error('Conversion already in progress');
+        }
         
         this.isConverting = true;
+        
         const ff = this.ffmpeg;
         const extension = this.videoFile.name.split('.').pop()?.toLowerCase() || 'mp4';
         const inputFilename = `input.${extension}`;
         const outputFilename = 'output.mp3';
         
         try {
-            videoDebugLog(`Starting conversion: ${startTime.toFixed(1)}s to ${endTime.toFixed(1)}s`);
+            // Update progress UI
+            const progressText = document.getElementById('videoProgressText');
+            if (progressText) progressText.textContent = 'Loading video...';
             
-            // Write video file to FFmpeg virtual filesystem
+            // Read video file
+            console.log(`Loading video: ${this.videoFile.name} (${(this.videoFile.size / 1024 / 1024).toFixed(2)} MB)`);
             const videoData = await this.videoFile.arrayBuffer();
             ff.FS('writeFile', inputFilename, new Uint8Array(videoData));
-            videoDebugLog(`Video written to memory: ${(videoData.byteLength / 1024 / 1024).toFixed(1)}MB`);
             
-            // Build command
+            // Build FFmpeg command
             const command = [];
-            if (startTime > 0.1) command.push('-ss', startTime.toFixed(3));
+            
+            // Seek to start time (if not at beginning)
+            if (startTime > 0.1) {
+                command.push('-ss', startTime.toFixed(3));
+            }
+            
+            // Input file
             command.push('-i', inputFilename);
             
+            // Duration limit (if not at end)
             const duration = endTime - startTime;
-            if (duration < this.videoDuration - 0.1) command.push('-t', duration.toFixed(3));
+            if (duration < this.videoDuration - 0.1) {
+                command.push('-t', duration.toFixed(3));
+            }
             
+            // Audio encoding options
             command.push(
-                '-vn', '-acodec', 'libmp3lame',
-                '-ab', '192k', '-ar', '44100', '-ac', '2',
+                '-vn',           // No video
+                '-acodec', 'libmp3lame',  // MP3 codec
+                '-ab', '192k',   // Bitrate 192 kbps
+                '-ar', '44100',  // Sample rate 44.1 kHz
+                '-ac', '2',      // Stereo
                 outputFilename
             );
             
-            videoDebugLog(`FFmpeg command: ${command.join(' ')}`);
+            console.log('FFmpeg command:', command.join(' '));
+            
+            // Update progress text
+            if (progressText) progressText.textContent = 'Converting to MP3...';
             
             // Run conversion
             await ff.run(...command);
             
-            // Read result
+            // Read output file
+            console.log('Reading output file...');
             const outputData = ff.FS('readFile', outputFilename);
             this.mp3Blob = new Blob([outputData.buffer], { type: 'audio/mpeg' });
             
-            // Cleanup
+            // Clean up
             ff.FS('unlink', inputFilename);
             ff.FS('unlink', outputFilename);
             
-            videoDebugLog(`✅ Conversion complete: ${(this.mp3Blob.size / 1024).toFixed(0)}KB`, 'success');
+            console.log(`Conversion complete: ${(this.mp3Blob.size / 1024).toFixed(0)} KB MP3`);
             return this.mp3Blob;
             
         } catch (error) {
-            videoDebugLog(`Conversion error: ${error.message}`, 'error');
+            console.error('Conversion error:', error);
+            
+            // Clean up files if they exist
             try { ff.FS('unlink', inputFilename); } catch(e) {}
             try { ff.FS('unlink', outputFilename); } catch(e) {}
-            throw error;
+            
+            // Provide user-friendly error message
+            let errorMessage = 'Conversion failed. ';
+            if (error.message.includes('timeout')) {
+                errorMessage += 'The video is too large or conversion took too long.';
+            } else if (error.message.includes('memory')) {
+                errorMessage += 'The video is too large to process in browser memory.';
+            } else {
+                errorMessage += 'Please try a different video format (MP4 works best).';
+            }
+            
+            throw new Error(errorMessage);
         } finally {
             this.isConverting = false;
         }
     }
     
-    getMp3Blob() { return this.mp3Blob; }
+    getMp3Blob() {
+        return this.mp3Blob;
+    }
     
     reset() {
         this.videoFile = null;
         this.videoDuration = 0;
         this.mp3Blob = null;
         this.isConverting = false;
+        
+        // Reset UI elements
+        const startSlider = document.getElementById('trimStart');
+        const endSlider = document.getElementById('trimEnd');
+        const progressBar = document.getElementById('videoProgressBar');
+        const progressPercent = document.getElementById('videoProgressPercent');
+        const progressText = document.getElementById('videoProgressText');
+        
+        if (startSlider) startSlider.value = 0;
+        if (endSlider) endSlider.value = 100;
+        if (progressBar) progressBar.style.width = '0%';
+        if (progressPercent) progressPercent.textContent = '0%';
+        if (progressText) progressText.textContent = '';
+    }
+    
+    isReady() {
+        return this.isLoaded && !this.isConverting;
     }
 }
 
 // Create global instance
 const videoConverter = new VideoToMp3Converter();
 
-// ============================================================================
-// INITIALIZATION
-// ============================================================================
+// Export for global use
+if (typeof window !== 'undefined') {
+    window.videoConverter = videoConverter;
+    window.VideoToMp3Converter = VideoToMp3Converter;
+    window.loadFFmpeg = loadFFmpeg;
+}
 
+// ============================================================================
+// Video Converter Initialization Function
+// ============================================================================
 function initVideoConverter() {
-    videoDebugLog('Initializing video converter UI...');
+    console.log('Initializing video converter...');
     
-    const elements = {
-        uploadZone: document.getElementById('videoUploadZone'),
-        fileInput: document.getElementById('videoFileInput'),
-        section: document.getElementById('videoSection'),
-        preview: document.getElementById('videoPreview'),
-        trimStart: document.getElementById('trimStart'),
-        trimEnd: document.getElementById('trimEnd'),
-        trimStartLabel: document.getElementById('trimStartLabel'),
-        trimEndLabel: document.getElementById('trimEndLabel'),
-        trimDuration: document.getElementById('trimDuration'),
-        resetBtn: document.getElementById('resetTrimBtn'),
-        convertBtn: document.getElementById('videoConvertBtn'),
-        clearBtn: document.getElementById('videoClearBtn'),
-        progress: document.getElementById('videoProgress'),
-        downloadReady: document.getElementById('videoDownloadReady'),
-        downloadBtn: document.getElementById('videoDownloadBtn')
-    };
+    // Get DOM elements with null checks
+    const videoUploadZone = document.getElementById('videoUploadZone');
+    const videoFileInput = document.getElementById('videoFileInput');
+    const videoSection = document.getElementById('videoSection');
+    const videoPreview = document.getElementById('videoPreview');
+    const trimStart = document.getElementById('trimStart');
+    const trimEnd = document.getElementById('trimEnd');
+    const trimStartLabel = document.getElementById('trimStartLabel');
+    const trimEndLabel = document.getElementById('trimEndLabel');
+    const trimDuration = document.getElementById('trimDuration');
+    const resetTrimBtn = document.getElementById('resetTrimBtn');
+    const videoConvertBtn = document.getElementById('videoConvertBtn');
+    const videoClearBtn = document.getElementById('videoClearBtn');
+    const videoProgress = document.getElementById('videoProgress');
+    const videoDownloadReady = document.getElementById('videoDownloadReady');
+    const videoDownloadBtn = document.getElementById('videoDownloadBtn');
     
-    if (!elements.uploadZone || !elements.fileInput) {
-        videoDebugLog('Required elements not found, skipping init', 'warning');
+    // Check if required elements exist
+    if (!videoUploadZone || !videoFileInput) {
+        console.warn('Video converter elements not found, skipping initialization');
         return;
     }
     
     let currentVideoFile = null;
     let currentDuration = 0;
-    const originalBtnHTML = elements.convertBtn?.innerHTML || 'Convert to MP3';
     
+    // Store original button HTML
+    const originalBtnHTML = videoConvertBtn ? videoConvertBtn.innerHTML : 'Convert to MP3';
+    
+    // Helper to update trim labels
     function updateTrimLabels() {
-        if (!elements.trimStart || !elements.trimEnd) return;
-        const startPercent = parseFloat(elements.trimStart.value) || 0;
-        const endPercent = parseFloat(elements.trimEnd.value) || 100;
+        if (!trimStart || !trimEnd || !trimStartLabel || !trimEndLabel || !trimDuration) return;
+        
+        const startPercent = parseFloat(trimStart.value) || 0;
+        const endPercent = parseFloat(trimEnd.value) || 100;
         const startTime = (startPercent / 100) * currentDuration;
         const endTime = (endPercent / 100) * currentDuration;
         
-        if (elements.trimStartLabel) elements.trimStartLabel.textContent = startTime.toFixed(1) + 's';
-        if (elements.trimEndLabel) elements.trimEndLabel.textContent = endTime.toFixed(1) + 's';
-        if (elements.trimDuration) elements.trimDuration.textContent = (endTime - startTime).toFixed(1) + 's';
+        trimStartLabel.textContent = startTime.toFixed(1) + 's';
+        trimEndLabel.textContent = endTime.toFixed(1) + 's';
+        trimDuration.textContent = (endTime - startTime).toFixed(1) + 's';
         
-        if (elements.preview?.readyState >= 1) {
-            elements.preview.currentTime = startTime;
+        // Update video preview time if playing
+        if (videoPreview && videoPreview.readyState >= 1) {
+            videoPreview.currentTime = startTime;
         }
     }
     
-    async function loadVideoFile(file) {
-        const ext = file.name.split('.').pop()?.toLowerCase();
-        const validExts = ['mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v', 'mpg', 'mpeg'];
-        
-        if (!validExts.includes(ext)) {
-            window.App?.showError('Please select a valid video file (MP4, MOV, AVI, WebM, MKV).');
-            return;
-        }
-        
-        if (file.size > 200 * 1024 * 1024) {
-            window.App?.showError('Video must be under 200MB.');
-            return;
-        }
-        
-        currentVideoFile = file;
-        const url = URL.createObjectURL(file);
-        if (elements.preview) elements.preview.src = url;
-        if (elements.section) elements.section.style.display = 'block';
-        if (elements.progress) elements.progress.style.display = 'none';
-        if (elements.downloadReady) elements.downloadReady.style.display = 'none';
-        
-        if (elements.preview) {
-            elements.preview.onloadedmetadata = () => {
-                currentDuration = elements.preview.duration;
-                if (elements.trimStart) elements.trimStart.max = 100;
-                if (elements.trimEnd) elements.trimEnd.max = 100;
-                if (elements.trimEnd) elements.trimEnd.value = 100;
-                if (elements.trimStart) elements.trimStart.value = 0;
-                updateTrimLabels();
-                videoDebugLog(`Video ready: ${currentDuration.toFixed(1)}s duration`, 'success');
-            };
-        }
-        
-        window.App?.hideError();
-        videoConverter.reset();
-    }
+    // Upload zone click
+    videoUploadZone.addEventListener('click', () => videoFileInput.click());
     
-    // Event listeners
-    elements.uploadZone.addEventListener('click', () => elements.fileInput.click());
-    
-    elements.fileInput.addEventListener('change', (e) => {
-        if (e.target.files?.[0]) loadVideoFile(e.target.files[0]);
+    // File input change
+    videoFileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+            loadVideoFile(e.target.files[0]);
+        }
         e.target.value = '';
     });
     
     // Drag and drop
     ['dragover', 'dragleave', 'drop'].forEach(evt => {
-        elements.uploadZone.addEventListener(evt, (e) => {
+        videoUploadZone.addEventListener(evt, (e) => {
             e.preventDefault();
-            if (evt === 'dragover') elements.uploadZone.classList.add('drag-over');
-            else if (evt === 'dragleave') elements.uploadZone.classList.remove('drag-over');
-            else if (evt === 'drop') {
-                elements.uploadZone.classList.remove('drag-over');
-                if (e.dataTransfer.files[0]) loadVideoFile(e.dataTransfer.files[0]);
+            if (evt === 'dragover') {
+                videoUploadZone.classList.add('drag-over');
+            } else if (evt === 'dragleave') {
+                videoUploadZone.classList.remove('drag-over');
+            } else if (evt === 'drop') {
+                videoUploadZone.classList.remove('drag-over');
+                const file = e.dataTransfer.files[0];
+                if (file) loadVideoFile(file);
             }
         });
     });
     
-    if (elements.trimStart) elements.trimStart.addEventListener('input', updateTrimLabels);
-    if (elements.trimEnd) elements.trimEnd.addEventListener('input', updateTrimLabels);
+    // Load video file
+    async function loadVideoFile(file) {
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        const validExts = ['mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v', 'mpg', 'mpeg'];
+        
+        if (!validExts.includes(ext)) {
+            if (window.App) {
+                window.App.showError('Please select a video file (MP4, MOV, AVI, WebM, MKV).');
+            } else {
+                alert('Please select a video file (MP4, MOV, AVI, WebM, MKV).');
+            }
+            return;
+        }
+        
+        if (file.size > 200 * 1024 * 1024) {
+            if (window.App) {
+                window.App.showError('Video must be under 200MB.');
+            } else {
+                alert('Video must be under 200MB.');
+            }
+            return;
+        }
+        
+        currentVideoFile = file;
+        const url = URL.createObjectURL(file);
+        
+        if (videoPreview) {
+            videoPreview.src = url;
+        }
+        
+        if (videoSection) {
+            videoSection.style.display = 'block';
+        }
+        
+        if (videoProgress) {
+            videoProgress.style.display = 'none';
+        }
+        
+        if (videoDownloadReady) {
+            videoDownloadReady.style.display = 'none';
+        }
+        
+        if (videoPreview) {
+            videoPreview.onloadedmetadata = () => {
+                currentDuration = videoPreview.duration;
+                if (trimStart) trimStart.max = 100;
+                if (trimEnd) trimEnd.max = 100;
+                if (trimEnd) trimEnd.value = 100;
+                if (trimStart) trimStart.value = 0;
+                updateTrimLabels();
+                
+                console.log(`Video loaded: ${currentDuration.toFixed(2)} seconds`);
+            };
+        }
+        
+        if (videoPreview) {
+            videoPreview.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        if (window.App && window.App.hideError) {
+            window.App.hideError();
+        }
+        
+        // Reset converter state
+        videoConverter.reset();
+    }
     
-    if (elements.resetBtn) {
-        elements.resetBtn.addEventListener('click', () => {
-            if (elements.trimStart) elements.trimStart.value = 0;
-            if (elements.trimEnd) elements.trimEnd.value = 100;
-            updateTrimLabels();
-            if (elements.preview?.readyState >= 1) elements.preview.currentTime = 0;
+    // Trim sliders
+    if (trimStart) {
+        trimStart.addEventListener('input', updateTrimLabels);
+    }
+    
+    if (trimEnd) {
+        trimEnd.addEventListener('input', updateTrimLabels);
+    }
+    
+    if (trimStart && videoPreview) {
+        trimStart.addEventListener('change', () => {
+            if (videoPreview.readyState >= 1) {
+                const startPercent = parseFloat(trimStart.value) || 0;
+                videoPreview.currentTime = (startPercent / 100) * currentDuration;
+            }
         });
     }
     
-    if (elements.convertBtn) {
-        elements.convertBtn.addEventListener('click', async () => {
+    if (trimEnd && videoPreview) {
+        trimEnd.addEventListener('change', () => {
+            if (videoPreview.readyState >= 1) {
+                const endPercent = parseFloat(trimEnd.value) || 100;
+                videoPreview.currentTime = (endPercent / 100) * currentDuration;
+            }
+        });
+    }
+    
+    // Reset trim
+    if (resetTrimBtn) {
+        resetTrimBtn.addEventListener('click', () => {
+            if (trimStart) trimStart.value = 0;
+            if (trimEnd) trimEnd.value = 100;
+            updateTrimLabels();
+            if (videoPreview && videoPreview.readyState >= 1) {
+                videoPreview.currentTime = 0;
+            }
+        });
+    }
+    
+    // Convert to MP3
+    if (videoConvertBtn) {
+        videoConvertBtn.addEventListener('click', async () => {
             if (!currentVideoFile) {
-                window.App?.showError('Please select a video file first.');
+                if (window.App) window.App.showError('Please select a video file first.');
                 return;
             }
             
             if (videoConverter.isConverting) {
-                window.App?.showError('Conversion already in progress.');
+                if (window.App) window.App.showError('Conversion already in progress. Please wait.');
                 return;
             }
             
-            elements.convertBtn.disabled = true;
-            elements.convertBtn.innerHTML = '<span class="spinner"></span> Starting...';
-            if (elements.progress) elements.progress.style.display = 'block';
-            if (elements.downloadReady) elements.downloadReady.style.display = 'none';
+            videoConvertBtn.disabled = true;
+            videoConvertBtn.innerHTML = '<span class="spinner"></span> Loading converter...';
+            
+            if (videoProgress) videoProgress.style.display = 'block';
+            if (videoDownloadReady) videoDownloadReady.style.display = 'none';
+            
+            const progressBar = document.getElementById('videoProgressBar');
+            const progressPercent = document.getElementById('videoProgressPercent');
+            const progressText = document.getElementById('videoProgressText');
+            
+            if (progressBar) progressBar.style.width = '0%';
+            if (progressPercent) progressPercent.textContent = '0%';
+            if (progressText) progressText.textContent = 'Preparing...';
             
             try {
-                // Load FFmpeg (this downloads the core)
-                elements.convertBtn.innerHTML = '<span class="spinner"></span> Loading converter (20MB)...';
-                videoDebugLog('Loading FFmpeg (may take 30-60s on 3G)...');
+                // Load FFmpeg
+                videoConvertBtn.innerHTML = '<span class="spinner"></span> Loading...';
                 await videoConverter.loadFFmpeg();
                 
                 // Load video
-                elements.convertBtn.innerHTML = '<span class="spinner"></span> Loading video...';
+                videoConvertBtn.innerHTML = '<span class="spinner"></span> Loading video...';
                 await videoConverter.loadVideo(currentVideoFile);
                 
-                // Convert
+                // Get trim times
                 const { startTime, endTime } = videoConverter.getTrimTimes();
-                elements.convertBtn.innerHTML = '<span class="spinner"></span> Converting...';
+                console.log(`Trimming: ${startTime.toFixed(1)}s to ${endTime.toFixed(1)}s (${(endTime - startTime).toFixed(1)}s duration)`);
+                
+                // Convert
+                videoConvertBtn.innerHTML = '<span class="spinner"></span> Converting to MP3...';
                 await videoConverter.convertToMp3(startTime, endTime);
                 
-                // Success!
-                if (elements.progress) elements.progress.style.display = 'none';
-                if (elements.downloadReady) elements.downloadReady.style.display = 'block';
+                // Hide progress, show download
+                if (videoProgress) videoProgress.style.display = 'none';
+                if (videoDownloadReady) videoDownloadReady.style.display = 'block';
                 
                 // Auto-download
-                const mp3Name = currentVideoFile.name.replace(/\.[^.]+$/, '') + '.mp3';
-                const blob = videoConverter.getMp3Blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = mp3Name;
-                a.click();
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-                
-                videoDebugLog('Conversion completed, download started', 'success');
+                const mp3Name = (currentVideoFile?.name || 'audio').replace(/\.[^.]+$/, '') + '.mp3';
+                if (window.App) {
+                    window.App.downloadBlob(videoConverter.getMp3Blob(), mp3Name);
+                } else {
+                    // Fallback download
+                    const url = URL.createObjectURL(videoConverter.getMp3Blob());
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = mp3Name;
+                    a.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                }
                 
                 // Update stats
                 if (window.StatsStore) {
@@ -579,62 +593,62 @@ function initVideoConverter() {
                     if (todayCount) todayCount.textContent = window.StatsStore.getToday();
                 }
                 
-                setTimeout(() => window.App?.showFeedbackModal(), 1500);
+                // Show feedback modal
+                if (window.App) {
+                    setTimeout(() => window.App.showFeedbackModal(), 1500);
+                }
+                
+                console.log('Conversion completed successfully');
                 
             } catch (error) {
-                videoDebugLog(`Conversion failed: ${error.message}`, 'error');
-                window.App?.showError(error.message || 'Conversion failed. Try a smaller MP4 file.');
-                if (elements.progress) elements.progress.style.display = 'none';
+                console.error('Conversion failed:', error);
+                if (window.App) {
+                    window.App.showError(error.message || 'Conversion failed. Please try again with an MP4 file.');
+                }
+                if (videoProgress) videoProgress.style.display = 'none';
             } finally {
-                elements.convertBtn.disabled = false;
-                elements.convertBtn.innerHTML = originalBtnHTML;
+                videoConvertBtn.disabled = false;
+                videoConvertBtn.innerHTML = originalBtnHTML;
             }
         });
     }
     
-    if (elements.downloadBtn) {
-        elements.downloadBtn.addEventListener('click', () => {
+    // Manual download button (backup)
+    if (videoDownloadBtn) {
+        videoDownloadBtn.addEventListener('click', () => {
             const blob = videoConverter.getMp3Blob();
             if (blob && currentVideoFile) {
                 const name = currentVideoFile.name.replace(/\.[^.]+$/, '') + '.mp3';
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = name;
-                a.click();
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                if (window.App) {
+                    window.App.downloadBlob(blob, name);
+                } else {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = name;
+                    a.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                }
             }
         });
     }
     
-    if (elements.clearBtn) {
-        elements.clearBtn.addEventListener('click', () => {
+    // Clear / choose different video
+    if (videoClearBtn) {
+        videoClearBtn.addEventListener('click', () => {
             currentVideoFile = null;
-            if (elements.preview) elements.preview.src = '';
-            if (elements.section) elements.section.style.display = 'none';
-            if (elements.progress) elements.progress.style.display = 'none';
-            if (elements.downloadReady) elements.downloadReady.style.display = 'none';
+            if (videoPreview) videoPreview.src = '';
+            if (videoSection) videoSection.style.display = 'none';
+            if (videoProgress) videoProgress.style.display = 'none';
+            if (videoDownloadReady) videoDownloadReady.style.display = 'none';
             videoConverter.reset();
         });
     }
     
-    videoDebugLog('Video converter UI ready', 'success');
-}
-
-// Initialize on load
-if (typeof window !== 'undefined') {
-    ensureDebugPanel();
-    initDebugPanelTrigger();
-    
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            setTimeout(initVideoConverter, 500);
-        });
-    } else {
-        setTimeout(initVideoConverter, 500);
-    }
+    console.log('Video converter initialized');
 }
 
 // Export for global use
-window.videoConverter = videoConverter;
-window.initVideoConverter = initVideoConverter;
+if (typeof window !== 'undefined') {
+    window.initVideoConverter = initVideoConverter;
+}
