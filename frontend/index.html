@@ -2,11 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=yes"
+    />
     <meta
       name="description"
       content="Free, unlimited file converter. Convert HEIC to PNG, Video to MP3 with trimming — all in your browser. No uploads, 100% private."
     />
+    <!-- CRITICAL: These headers are REQUIRED for FFmpeg.wasm on Chrome Android -->
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
     <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
     <meta name="theme-color" content="#4F46E5" />
@@ -46,12 +50,53 @@
 
     <!-- FFmpeg for Video → MP3 -->
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.9.8/dist/ffmpeg.min.js"></script>
+
+    <style>
+      /* Loading spinner */
+      .spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 0.8s linear infinite;
+        margin-right: 8px;
+        vertical-align: middle;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Mobile optimizations */
+      @media (max-width: 768px) {
+        .btn-large {
+          width: 100%;
+          margin: 5px 0;
+        }
+        .video-actions {
+          flex-direction: column;
+        }
+        .trim-sliders {
+          padding: 10px;
+        }
+      }
+
+      /* Debug panel toggle hint */
+      .logo {
+        cursor: pointer;
+        user-select: none;
+      }
+    </style>
   </head>
   <body>
     <header class="header">
       <div class="container">
         <div class="header-content">
-          <div class="logo" aria-label="File Converter Logo">
+          <div class="logo" aria-label="File Converter Logo (tap 5x for debug)">
             <i
               data-lucide="zap"
               class="logo-icon"
