@@ -461,5 +461,41 @@
     <script src="js/heic-converter.js"></script>
     <script src="js/video-converter.js"></script>
     <script src="js/app.js"></script>
+    <!-- Add this right before </body> tag -->
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>
+      // Initialize debug console on phone screen
+      eruda.init();
+
+      // Auto-capture all FFmpeg errors
+      const originalError = console.error;
+      console.error = function (...args) {
+        originalError.apply(console, args);
+        if (args[0] && args[0].toString().includes("FFmpeg")) {
+          eruda.get("console").log("⚠️ FFMPEG ERROR:", args);
+        }
+      };
+
+      // Log critical info
+      setTimeout(() => {
+        console.log("=== PHONE DEBUG INFO ===");
+        console.log("Cross-origin isolated:", crossOriginIsolated);
+        console.log(
+          "SharedArrayBuffer:",
+          typeof SharedArrayBuffer !== "undefined",
+        );
+        console.log("URL:", window.location.href);
+
+        if (performance.memory) {
+          console.log(
+            "Memory limit:",
+            (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(0) +
+              "MB",
+          );
+        }
+
+        console.log("=== Ready - Try converting a video ===");
+      }, 1000);
+    </script>
   </body>
 </html>
