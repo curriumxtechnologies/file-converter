@@ -1,78 +1,404 @@
 // ============================================================================
+// DEBUGGING: Chrome Mobile Diagnostics
+// ============================================================================
+
+const DEBUG = true;
+
+function logDebug(message, data = null) {
+    if (DEBUG) {
+        const timestamp = new Date().toISOString().split('T')[1].slice(0, 12);
+        console.log(`[${timestamp}] 🔍 ${message}`, data || '');
+        
+        // Also log to a visible div on mobile
+        let debugPanel = document.getElementById('debug-panel');
+        if (!debugPanel && document.body) {
+            debugPanel = document.createElement('div');
+            debugPanel.id = 'debug-panel';
+            debugPanel.style.cssText = `
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: rgba(0,0,0,0.9);
+                color: #0f0;
+                font-family: monospace;
+                font-size: 11px;
+                padding: 8px;
+                max-height: 150px;
+                overflow-y: auto;
+                z-index: 9999;
+                display: none;
+                pointer-events: none;
+            `;
+            document.body.appendChild(debugPanel);
+        }
+        
+        if (debugPanel && window.location.search.includes('debug=true')) {
+            debugPanel.style.display = 'block';
+            const logLine = document.createElement('div');
+            logLine.textContent = `${timestamp} ${message}`;
+            logLine.style.borderBottom = '1px solid #333';
+            debugPanel.appendChild(logLine);
+            debugPanel.scrollTop = debugPanel.scrollHeight;
+            
+            // Keep only last 20 lines
+            while (debugPanel.children.length > 20) {
+                debugPanel.removeChild(debugPanel.firstChild);
+            }
+        }
+    }
+}
+
+// Run diagnostic tests
+async function runMobileDiagnostics() {
+    logDebug('=== MOBILE DIAGNOSTICS START ===');
+    
+    // 1. Browser detection
+    const ua = navigator.userAgent;
+    const isChrome = /Chrome/.test(ua) && !/Edg/.test(ua);
+    const isAndroid = /Android/.test(ua);
+    const chromeVersion = ua.match(/Chrome\/(\d+)/)?.[1] || 'unknown';
+    
+    logDebug(`Browser: ${isChrome ? 'Chrome' : 'Other'}, Android: ${isAndroid}, Chrome v${chromeVersion}`);
+    
+    // 2. Check SharedArrayBuffer
+    let hasSAB = false;
+    try {
+        hasSAB = typeof SharedArrayBuffer !== 'undefined';
+        logDebug(`SharedArrayBuffer: ${hasSAB ? '✅ AVAILABLE' : '❌ NOT AVAILABLE'}`);
+        
+        if (!hasSAB) {
+            logDebug('⚠️ SharedArrayBuffer missing - FFmpeg.wasm WILL NOT WORK');
+            logDebug('Need COOP/COEP headers or HTTPS/localhost');
+            
+            // Check if we're on HTTPS/localhost
+            const isSecure = window.location.protocol === 'https:' || 
+                            window.location.hostname === 'localhost' ||
+                            window.location.hostname === '127.0.0.1';
+            logDebug(`Secure context (HTTPS/localhost): ${isSecure ? '✅' : '❌'}`);
+            
+            // Check headers via fetch (if possible)
+            try {
+                const response = await fetch(window.location.href, { method: 'HEAD' });
+                const coop = response.headers.get('Cross-Origin-Opener-Policy');
+                const coep = response.headers.get('Cross-Origin-Embedder-Policy');
+                logDebug(`COOP header: ${coop || 'missing'}`);
+                logDebug(`COEP header: ${coep || 'missing'}`);
+            } catch(e) {
+                logDebug(`Could not check headers: ${e.message}`);
+            }
+        }
+    } catch(e) {
+        logDebug(`SharedArrayBuffer check error: ${e.message}`);
+    }
+    
+    // 3. Check memory
+    if ('deviceMemory' in navigator) {
+        logDebug(`Device memory: ${navigator.deviceMemory} GB`);
+    }
+    if ('connection' in navigator) {
+        logDebug(`Connection type: ${navigator.connection?.effectiveType || 'unknown'}`);
+    }
+    
+    // 4. Test FFmpeg load with timeout
+    logDebug('Attempting to test load FFmpeg...');
+    const startTime = Date.now();
+    
+    try {
+        // Try loading with timeout
+        const loadPromise = loadFFmpeg();
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('FFmpeg load timeout (15s)')), 15000)
+        );
+        
+        await Promise.race([loadPromise, timeoutPromise]);
+        const loadTime = Date.now() - startTime;
+        logDebug(`✅ FFmpeg loaded successfully in ${loadTime}ms`);
+    } catch (error) {
+        logDebug(`❌ FFmpeg load failed: ${error.message}`);
+        logDebug(`Error stack: ${error.stack?.substring(0, 200) || 'no stack'}`);
+        
+        // Check specific error patterns
+        if (error.message.includes('SharedArrayBuffer')) {
+            logDebug('🔧 FIX: Enable cross-origin isolation or use localhost with HTTPS');
+        } else if (error.message.includes('memory')) {
+            logDebug('🔧 FIX: Video too large for device memory');
+        } else if (error.message.includes('fetch')) {
+            logDebug('🔧 FIX: Network issue - check CORS or CDN availability');
+        } else if (error.message.includes('timeout')) {
+            logDebug('🔧 FIX: Slow connection or CDN blocking - try different network');
+        }
+    }
+    
+    // 5. Test CDN reachability
+    const cdns = [
+        'https://unpkg.com/@ffmpeg/ffmpeg@0.9.8/dist/ffmpeg.min.js',
+        'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.9.8/dist/ffmpeg.min.js'
+    ];
+    
+    for (const cdn of cdns) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const response = await fetch(cdn, { method: 'HEAD', signal: controller.signal });
+            clearTimeout(timeoutId);
+            logDebug(`CDN ${cdn.split('/')[2]}: ${response.ok ? '✅ reachable' : `❌ ${response.status}`}`);
+        } catch(e) {
+            logDebug(`CDN ${cdn.split('/')[2]}: ❌ unreachable (${e.message})`);
+        }
+    }
+    
+    // 6. Check for service workers that might block
+    if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        logDebug(`Service workers: ${registrations.length}`);
+    }
+    
+    logDebug('=== MOBILE DIAGNOSTICS END ===');
+    
+    // Show user-friendly error if FFmpeg won't work
+    if (!hasSAB) {
+        const errorDiv = document.getElementById('errorSection');
+        if (errorDiv) {
+            const errorMsg = document.getElementById('errorMessage');
+            if (errorMsg && window.App) {
+                window.App.showError(
+                    '⚠️ Chrome on Android requires HTTPS or localhost for video conversion. ' +
+                    'Please access this site via HTTPS or use a different browser like Firefox. ' +
+                    'HEIC to PNG conversion still works fine!'
+                );
+            }
+        }
+    }
+}
+
+// Run diagnostics on page load
+if (typeof window !== 'undefined') {
+    // Wait for DOM to load
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(runMobileDiagnostics, 1000);
+        });
+    } else {
+        setTimeout(runMobileDiagnostics, 1000);
+    }
+}
+
+// Add manual debug trigger (tap 5 times on logo to see debug panel)
+let debugTapCount = 0;
+let debugTapTimer = null;
+document.addEventListener('DOMContentLoaded', () => {
+    const logo = document.querySelector('.logo');
+    if (logo) {
+        logo.addEventListener('click', () => {
+            debugTapCount++;
+            clearTimeout(debugTapTimer);
+            debugTapTimer = setTimeout(() => { debugTapCount = 0; }, 1000);
+            
+            if (debugTapCount === 5) {
+                const panel = document.getElementById('debug-panel');
+                if (panel) {
+                    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+                    debugTapCount = 0;
+                    runMobileDiagnostics(); // Re-run diagnostics
+                }
+            }
+        });
+    }
+});
+
+// ============================================================================
 // Video to MP3 Converter - FFmpeg.wasm
 // ============================================================================
 
 let ffmpeg = null;
 let isFFmpegLoaded = false;
 
-// Helper function to load FFmpeg with retry logic
+// Helper function to load FFmpeg with retry logic and debugging
 async function loadFFmpeg() {
-  if (isFFmpegLoaded && ffmpeg) return ffmpeg;
+  // ========== DEBUGGING SECTION ==========
+  const debugLog = [];
+  const logDebug = (message, data = null) => {
+    const timestamp = new Date().toISOString().split('T')[1].slice(0, 12);
+    const logEntry = `[${timestamp}] ${message}`;
+    debugLog.push(logEntry);
+    console.log(logEntry, data || '');
+    
+    // Also log to visible debug panel if it exists
+    if (typeof window !== 'undefined' && window.DEBUG_PANEL) {
+      const panel = document.getElementById('debug-panel');
+      if (panel) {
+        const div = document.createElement('div');
+        div.textContent = logEntry;
+        div.style.fontSize = '10px';
+        div.style.borderBottom = '1px solid #333';
+        panel.appendChild(div);
+        panel.scrollTop = panel.scrollHeight;
+        while (panel.children.length > 20) panel.removeChild(panel.firstChild);
+      }
+    }
+  };
   
-  // Check SharedArrayBuffer support
-  if (typeof SharedArrayBuffer === 'undefined') {
-    throw new Error('SharedArrayBuffer not available. Please ensure you are accessing via localhost with proper COOP/COEP headers.');
+  logDebug('=== loadFFmpeg() START ===');
+  logDebug(`User Agent: ${navigator.userAgent}`);
+  logDebug(`Location: ${window.location.href}`);
+  logDebug(`Protocol: ${window.location.protocol}`);
+  logDebug(`Hostname: ${window.location.hostname}`);
+  
+  // Check if already loaded
+  if (isFFmpegLoaded && ffmpeg) {
+    logDebug('FFmpeg already loaded, returning cached instance');
+    return ffmpeg;
   }
   
-  // Try multiple CDN sources and configurations
+  // ========== SHAREDARRAYBUFFER CHECK ==========
+  logDebug('Checking SharedArrayBuffer support...');
+  if (typeof SharedArrayBuffer === 'undefined') {
+    const errorMsg = 'SharedArrayBuffer not available. Required for FFmpeg.wasm. ' +
+                    'On Chrome Android, this requires HTTPS or localhost with proper COOP/COEP headers.';
+    logDebug(`❌ ${errorMsg}`);
+    
+    // Provide detailed diagnosis
+    const isSecure = window.location.protocol === 'https:' || 
+                    window.location.hostname === 'localhost' ||
+                    window.location.hostname === '127.0.0.1';
+    logDebug(`Secure context (HTTPS/localhost): ${isSecure ? 'YES' : 'NO'}`);
+    
+    if (!isSecure) {
+      throw new Error(`${errorMsg} Solution: Access via HTTPS or localhost`);
+    } else {
+      throw new Error(`${errorMsg} Solution: Add COOP/COEP headers to your server`);
+    }
+  }
+  logDebug('✅ SharedArrayBuffer is available');
+  
+  // ========== CHECK MEMORY CONSTRAINTS ==========
+  if (navigator.deviceMemory) {
+    logDebug(`Device memory: ${navigator.deviceMemory} GB`);
+    if (navigator.deviceMemory < 2) {
+      logDebug('⚠️ Low memory device - FFmpeg may fail for large videos');
+    }
+  }
+  
+  // ========== CHECK NETWORK SPEED ==========
+  if (navigator.connection) {
+    logDebug(`Network: ${navigator.connection.effectiveType}, Downlink: ${navigator.connection.downlink} Mbps`);
+    if (navigator.connection.saveData) {
+      logDebug('⚠️ Data saver enabled - may affect CDN loading');
+    }
+  }
+  
+  // ========== TRY MULTIPLE CDN SOURCES ==========
   const configs = [
-    // FFmpeg 0.10.0 (latest stable)
+    // Primary: FFmpeg 0.10.0 from unpkg
     {
       corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
       useWorker: false,
-      version: '0.10.0'
+      version: '0.10.0 (unpkg)',
+      priority: 1
     },
+    // Secondary: FFmpeg 0.10.0 from jsdelivr
     {
       corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
       useWorker: false,
-      version: '0.10.0 (jsdelivr)'
+      version: '0.10.0 (jsdelivr)',
+      priority: 2
     },
-    // FFmpeg 0.9.0 (fallback)
+    // Fallback: FFmpeg 0.9.0 from unpkg
     {
       corePath: 'https://unpkg.com/@ffmpeg/core@0.9.0/dist/ffmpeg-core.js',
       useWorker: false,
-      version: '0.9.0'
+      version: '0.9.0 (unpkg)',
+      priority: 3
     },
+    // Fallback: FFmpeg 0.9.0 from jsdelivr
     {
       corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.9.0/dist/ffmpeg-core.js',
       useWorker: false,
-      version: '0.9.0 (jsdelivr)'
+      version: '0.9.0 (jsdelivr)',
+      priority: 4
     },
-    // Try with worker enabled as last resort
+    // Last resort: Use worker mode (may work where standard fails)
     {
       corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
       useWorker: true,
-      version: '0.10.0 (worker)'
+      version: '0.10.0 (worker mode)',
+      priority: 5
+    },
+    // Ultra fallback: Use older FFmpeg with worker
+    {
+      corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.9.0/dist/ffmpeg-core.js',
+      useWorker: true,
+      version: '0.9.0 (worker mode)',
+      priority: 6
     }
   ];
   
+  let lastError = null;
+  let successConfig = null;
+  
   for (const config of configs) {
     try {
-      console.log(`Attempting to load FFmpeg from: ${config.corePath} (${config.version})`);
+      logDebug(`\n--- Attempt ${config.priority}/${configs.length}: ${config.version} ---`);
+      logDebug(`Core path: ${config.corePath}`);
+      logDebug(`Worker mode: ${config.useWorker}`);
+      
+      // Pre-check CDN availability with fetch
+      logDebug(`Testing CDN connectivity...`);
+      const cdnCheckStart = Date.now();
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const response = await fetch(config.corePath, { method: 'HEAD', signal: controller.signal });
+        clearTimeout(timeoutId);
+        const cdnCheckTime = Date.now() - cdnCheckStart;
+        if (response.ok) {
+          logDebug(`✅ CDN reachable (${cdnCheckTime}ms)`);
+        } else {
+          logDebug(`⚠️ CDN returned status ${response.status}, attempting anyway...`);
+        }
+      } catch (fetchError) {
+        logDebug(`⚠️ CDN check failed: ${fetchError.message}, attempting anyway...`);
+      }
       
       // Get createFFmpeg function
+      logDebug(`Looking for createFFmpeg on window...`);
       let createFFmpeg = window.createFFmpeg;
       if (!createFFmpeg && window.FFmpeg) {
+        logDebug(`Found window.FFmpeg, checking for createFFmpeg...`);
         createFFmpeg = window.FFmpeg.createFFmpeg;
       }
       if (!createFFmpeg && window.FFmpeg && typeof window.FFmpeg === 'object') {
+        logDebug(`Checking FFmpeg.default...`);
         createFFmpeg = window.FFmpeg.default?.createFFmpeg || window.FFmpeg.createFFmpeg;
       }
       
       if (!createFFmpeg) {
-        throw new Error('createFFmpeg not found on window');
+        throw new Error('createFFmpeg not found on window. Make sure FFmpeg script is loaded.');
       }
+      logDebug(`✅ createFFmpeg function found`);
       
+      // Create FFmpeg instance
+      logDebug(`Creating FFmpeg instance with config...`);
       ffmpeg = createFFmpeg({
         log: true,
         corePath: config.corePath,
-        useWorker: config.useWorker
+        useWorker: config.useWorker,
+        // Add memory limit for mobile devices
+        mainScriptUrl: config.corePath.replace('ffmpeg-core.js', 'ffmpeg-core.worker.js')
       });
       
       // Set up logging
       ffmpeg.setLogger(({ type, message }) => {
-        if (type === 'error') console.error('FFmpeg:', message);
-        else if (type === 'info') console.log('FFmpeg:', message);
+        if (type === 'error') {
+          console.error('FFmpeg error:', message);
+          logDebug(`FFmpeg error: ${message.substring(0, 100)}`);
+        } else if (type === 'info') {
+          console.log('FFmpeg info:', message);
+          if (message.includes('loading') || message.includes('download')) {
+            logDebug(`FFmpeg: ${message.substring(0, 100)}`);
+          }
+        }
       });
       
       // Set progress callback
@@ -86,33 +412,110 @@ async function loadFFmpeg() {
         if (progressPercent) progressPercent.textContent = `${percent}%`;
         if (progressText) {
           if (percent < 100) {
-            progressText.textContent = `Converting... ${percent}%`;
+            progressText.textContent = `Loading converter... ${percent}%`;
           } else {
-            progressText.textContent = 'Finalizing...';
+            progressText.textContent = 'Ready!';
           }
+        }
+        
+        if (percent % 25 === 0) {
+          logDebug(`Load progress: ${percent}%`);
         }
       });
       
-      // Set timeout for loading
+      // Load FFmpeg with timeout
+      logDebug(`Starting FFmpeg.load()... (timeout: 30s)`);
+      const loadStartTime = Date.now();
       const loadPromise = ffmpeg.load();
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('FFmpeg load timeout (30s)')), 30000)
+        setTimeout(() => reject(new Error(`FFmpeg load timeout after 30 seconds`)), 30000)
       );
       
       await Promise.race([loadPromise, timeoutPromise]);
+      const loadTime = Date.now() - loadStartTime;
       
+      // Verify FFmpeg is actually working
+      logDebug(`Testing FFmpeg with version check...`);
+      try {
+        const version = await ffmpeg.getVersion();
+        logDebug(`✅ FFmpeg version: ${version}`);
+      } catch (versionError) {
+        logDebug(`⚠️ Could not get version, but continuing: ${versionError.message}`);
+      }
+      
+      // Success!
       isFFmpegLoaded = true;
-      console.log(`FFmpeg loaded successfully from: ${config.corePath}`);
+      successConfig = config;
+      logDebug(`🎉 FFmpeg loaded successfully in ${loadTime}ms from ${config.version}`);
+      logDebug(`Total attempts: ${config.priority}, Configuration: ${config.useWorker ? 'worker' : 'main thread'}`);
+      logDebug(`=== loadFFmpeg() SUCCESS ===`);
+      
+      // Store debug log globally for troubleshooting
+      if (typeof window !== 'undefined') {
+        window.FFMPEG_LOAD_DEBUG = debugLog;
+      }
+      
       return ffmpeg;
       
     } catch (error) {
-      console.warn(`Failed to load from ${config.corePath}:`, error.message);
+      lastError = error;
+      logDebug(`❌ Failed to load from ${config.version}`);
+      logDebug(`Error name: ${error.name}`);
+      logDebug(`Error message: ${error.message}`);
+      if (error.stack) {
+        logDebug(`Error stack: ${error.stack.split('\n')[0]}`);
+      }
+      
+      // Specific error diagnosis
+      if (error.message.includes('fetch')) {
+        logDebug(`🔍 Diagnosis: Network issue - CDN may be blocked`);
+      } else if (error.message.includes('timeout')) {
+        logDebug(`🔍 Diagnosis: Timeout - slow connection or large core file`);
+      } else if (error.message.includes('WebAssembly')) {
+        logDebug(`🔍 Diagnosis: WebAssembly not supported or blocked`);
+      } else if (error.message.includes('memory')) {
+        logDebug(`🔍 Diagnosis: Out of memory - device may have insufficient RAM`);
+      }
+      
       ffmpeg = null;
       // Continue to next config
     }
   }
   
-  throw new Error('Failed to load FFmpeg from all CDN sources. Please check your internet connection and try again.');
+  // ========== ALL ATTEMPTS FAILED ==========
+  logDebug(`=== loadFFmpeg() FAILED ===`);
+  logDebug(`All ${configs.length} configurations failed`);
+  logDebug(`Last error: ${lastError?.message || 'Unknown error'}`);
+  
+  // Create comprehensive error message
+  let finalErrorMessage = 'Failed to load video converter. ';
+  
+  if (navigator.connection && navigator.connection.saveData) {
+    finalErrorMessage += 'Data saver mode may be blocking downloads. ';
+  }
+  
+  if (navigator.deviceMemory && navigator.deviceMemory < 2) {
+    finalErrorMessage += 'Your device has limited memory. ';
+  }
+  
+  if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+    finalErrorMessage += 'Video conversion requires HTTPS. ';
+  }
+  
+  finalErrorMessage += 'Please try: 1) Using WiFi instead of mobile data, 2) Disabling ad blocker, 3) Using HEIC converter instead.';
+  
+  // Store debug info for support
+  if (typeof window !== 'undefined') {
+    window.FFMPEG_LOAD_DEBUG = debugLog;
+    window.FFMPEG_LOAD_ERROR = finalErrorMessage;
+    
+    // Try to show error in UI
+    if (window.App && window.App.showError) {
+      window.App.showError(finalErrorMessage);
+    }
+  }
+  
+  throw new Error(finalErrorMessage);
 }
 
 // ============================================================================

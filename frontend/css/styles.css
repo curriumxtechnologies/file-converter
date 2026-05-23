@@ -1095,3 +1095,11 @@ body {
     opacity: 1;
     transform: translateY(0);
 }
+
+/* Add to your CSS file */
+@media (max-width: 768px) {
+    #debug-panel {
+        font-size: 10px;
+        max-height: 120px;
+    }
+}
