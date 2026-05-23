@@ -1,60 +1,52 @@
 // ============================================================================
-// Video to MP3 Converter - FFmpeg.wasm (Mobile-Optimized)
+// Video to MP3 Converter - FFmpeg.wasm
 // ============================================================================
 
 let ffmpeg = null;
 let isFFmpegLoaded = false;
 
-// Detect mobile device
-const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-console.log(`Device detected: ${isMobile ? 'Mobile' : 'Desktop'}`);
-
-// Helper function to load FFmpeg with retry logic (Mobile-optimized)
+// Helper function to load FFmpeg with retry logic
 async function loadFFmpeg() {
   if (isFFmpegLoaded && ffmpeg) return ffmpeg;
   
   // Check SharedArrayBuffer support
   if (typeof SharedArrayBuffer === 'undefined') {
-    console.warn('SharedArrayBuffer not available - will use single-thread mode if possible');
+    throw new Error('SharedArrayBuffer not available. Please ensure you are accessing via localhost with proper COOP/COEP headers.');
   }
   
-  // Try multiple CDN sources and configurations (prioritizing single-thread for mobile)
+  // Try multiple CDN sources and configurations
   const configs = [
-    // Single-thread core (best for mobile - less memory, more stable)
+    // FFmpeg 0.10.0 (latest stable)
     {
-      corePath: 'https://unpkg.com/@ffmpeg/core-st@0.12.6/dist/ffmpeg-core.js',
+      corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
       useWorker: false,
-      version: '0.12.6 (single-thread)',
-      priority: 'high'
+      version: '0.10.0'
     },
     {
-      corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.12.6/dist/ffmpeg-core.js',
+      corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
       useWorker: false,
-      version: '0.12.6 (single-thread - jsdelivr)',
-      priority: 'high'
+      version: '0.10.0 (jsdelivr)'
     },
-    // Fallback to older single-thread version
+    // FFmpeg 0.9.0 (fallback)
     {
-      corePath: 'https://unpkg.com/@ffmpeg/core-st@0.10.0/dist/ffmpeg-core.js',
+      corePath: 'https://unpkg.com/@ffmpeg/core@0.9.0/dist/ffmpeg-core.js',
       useWorker: false,
-      version: '0.10.0 (single-thread)',
-      priority: 'medium'
+      version: '0.9.0'
     },
-    // Multi-thread as last resort (only for desktop)
     {
-      corePath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js',
+      corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.9.0/dist/ffmpeg-core.js',
+      useWorker: false,
+      version: '0.9.0 (jsdelivr)'
+    },
+    // Try with worker enabled as last resort
+    {
+      corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
       useWorker: true,
-      version: '0.12.6 (multi-thread)',
-      priority: 'low'
+      version: '0.10.0 (worker)'
     }
   ];
   
-  // On mobile, only try single-thread configs
-  const configsToTry = isMobile 
-    ? configs.filter(c => c.corePath.includes('core-st'))
-    : configs;
-  
-  for (const config of configsToTry) {
+  for (const config of configs) {
     try {
       console.log(`Attempting to load FFmpeg from: ${config.corePath} (${config.version})`);
       
@@ -101,11 +93,10 @@ async function loadFFmpeg() {
         }
       });
       
-      // Set timeout for loading (longer for mobile)
-      const timeoutMs = isMobile ? 60000 : 30000;
+      // Set timeout for loading
       const loadPromise = ffmpeg.load();
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error(`FFmpeg load timeout (${timeoutMs/1000}s)`)), timeoutMs)
+        setTimeout(() => reject(new Error('FFmpeg load timeout (30s)')), 30000)
       );
       
       await Promise.race([loadPromise, timeoutPromise]);
@@ -121,7 +112,7 @@ async function loadFFmpeg() {
     }
   }
   
-  throw new Error('Failed to load FFmpeg. On mobile, please ensure you have a stable internet connection and sufficient memory.');
+  throw new Error('Failed to load FFmpeg from all CDN sources. Please check your internet connection and try again.');
 }
 
 // ============================================================================
@@ -148,26 +139,13 @@ class VideoToMp3Converter {
             return true;
         } catch (error) {
             console.error('FFmpeg load failed:', error);
-            const errorMsg = error.message || 'Converter unavailable. Please ensure you are using a modern browser with sufficient memory.';
+            const errorMsg = error.message || 'Converter unavailable. Please ensure you are using localhost with HTTPS or a modern browser.';
             throw new Error(errorMsg);
         }
     }
 
     async loadVideo(file) {
         if (!file) throw new Error('No video file provided');
-        
-        // Mobile file size validation
-        const maxSizeMB = isMobile ? 50 : 200;
-        const fileSizeMB = file.size / 1024 / 1024;
-        
-        if (file.size > maxSizeMB * 1024 * 1024) {
-            throw new Error(`Video too large. ${isMobile ? 'Mobile devices support files up to 50MB.' : 'Please use files under 200MB.'} Your file is ${fileSizeMB.toFixed(1)}MB.`);
-        }
-        
-        // Warn if close to limit on mobile
-        if (isMobile && fileSizeMB > 40) {
-            console.warn(`Large file (${fileSizeMB.toFixed(1)}MB) on mobile - conversion may be slow or fail`);
-        }
         
         this.videoFile = file;
         return new Promise((resolve, reject) => {
@@ -179,7 +157,7 @@ class VideoToMp3Converter {
             video.onloadedmetadata = () => {
                 URL.revokeObjectURL(url);
                 this.videoDuration = video.duration;
-                console.log(`Video loaded: ${this.videoDuration.toFixed(2)}s, ${fileSizeMB.toFixed(2)} MB`);
+                console.log(`Video loaded: ${this.videoDuration.toFixed(2)}s, ${(file.size / 1024 / 1024).toFixed(2)} MB`);
                 resolve(this.videoDuration);
             };
             
@@ -212,10 +190,9 @@ class VideoToMp3Converter {
         let startTime = (startPercent / 100) * this.videoDuration;
         let endTime = (endPercent / 100) * this.videoDuration;
         
-        // Ensure minimum duration of 1 second (3 seconds on mobile for stability)
-        const minDuration = isMobile ? 3 : 1;
-        if (endTime - startTime < minDuration) {
-            endTime = Math.min(startTime + minDuration, this.videoDuration);
+        // Ensure minimum duration of 1 second
+        if (endTime - startTime < 1) {
+            endTime = Math.min(startTime + 1, this.videoDuration);
         }
         
         return { startTime, endTime };
@@ -246,14 +223,12 @@ class VideoToMp3Converter {
             const progressText = document.getElementById('videoProgressText');
             if (progressText) progressText.textContent = 'Loading video...';
             
-            // Read video file with progress update
+            // Read video file
             console.log(`Loading video: ${this.videoFile.name} (${(this.videoFile.size / 1024 / 1024).toFixed(2)} MB)`);
             const videoData = await this.videoFile.arrayBuffer();
-            
-            // Write file to FFmpeg virtual filesystem
             ff.FS('writeFile', inputFilename, new Uint8Array(videoData));
             
-            // Build FFmpeg command (optimized for mobile)
+            // Build FFmpeg command
             const command = [];
             
             // Seek to start time (if not at beginning)
@@ -270,31 +245,23 @@ class VideoToMp3Converter {
                 command.push('-t', duration.toFixed(3));
             }
             
-            // Audio encoding options - lower bitrate on mobile for faster processing
-            const bitrate = isMobile ? '128k' : '192k';
+            // Audio encoding options
             command.push(
                 '-vn',           // No video
                 '-acodec', 'libmp3lame',  // MP3 codec
-                '-ab', bitrate,   // Adaptive bitrate
+                '-ab', '192k',   // Bitrate 192 kbps
                 '-ar', '44100',  // Sample rate 44.1 kHz
                 '-ac', '2',      // Stereo
                 outputFilename
             );
             
             console.log('FFmpeg command:', command.join(' '));
-            console.log(`Using ${bitrate} bitrate (${isMobile ? 'mobile optimized' : 'standard'})`);
             
             // Update progress text
             if (progressText) progressText.textContent = 'Converting to MP3...';
             
-            // Run conversion with timeout for mobile
-            const conversionPromise = ff.run(...command);
-            const timeoutMs = isMobile ? 120000 : 60000; // 2 minutes for mobile, 1 minute for desktop
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Conversion timeout - file may be too large')), timeoutMs)
-            );
-            
-            await Promise.race([conversionPromise, timeoutPromise]);
+            // Run conversion
+            await ff.run(...command);
             
             // Read output file
             console.log('Reading output file...');
@@ -302,8 +269,8 @@ class VideoToMp3Converter {
             this.mp3Blob = new Blob([outputData.buffer], { type: 'audio/mpeg' });
             
             // Clean up
-            try { ff.FS('unlink', inputFilename); } catch(e) {}
-            try { ff.FS('unlink', outputFilename); } catch(e) {}
+            ff.FS('unlink', inputFilename);
+            ff.FS('unlink', outputFilename);
             
             console.log(`Conversion complete: ${(this.mp3Blob.size / 1024).toFixed(0)} KB MP3`);
             return this.mp3Blob;
@@ -318,15 +285,9 @@ class VideoToMp3Converter {
             // Provide user-friendly error message
             let errorMessage = 'Conversion failed. ';
             if (error.message.includes('timeout')) {
-                errorMessage += isMobile 
-                    ? 'The video is too large for mobile processing. Please try a shorter clip (under 2 minutes) or smaller file (under 50MB).'
-                    : 'The video is too large or conversion took too long.';
+                errorMessage += 'The video is too large or conversion took too long.';
             } else if (error.message.includes('memory')) {
-                errorMessage += isMobile
-                    ? 'Your device does not have enough memory. Please try a smaller video (under 30MB).'
-                    : 'The video is too large to process in browser memory.';
-            } else if (error.message.includes('SharedArrayBuffer')) {
-                errorMessage += 'Please ensure you are accessing the site via HTTPS or localhost with proper security headers.';
+                errorMessage += 'The video is too large to process in browser memory.';
             } else {
                 errorMessage += 'Please try a different video format (MP4 works best).';
             }
@@ -405,12 +366,6 @@ function initVideoConverter() {
         return;
     }
     
-    // Update upload text for mobile
-    const uploadLimitText = document.querySelector('#tab-video .upload-limit');
-    if (uploadLimitText && isMobile) {
-        uploadLimitText.textContent = 'MP4, MOV • Max 50MB (mobile optimized) • Extract MP3 audio';
-    }
-    
     let currentVideoFile = null;
     let currentDuration = 0;
     
@@ -463,7 +418,7 @@ function initVideoConverter() {
         });
     });
     
-    // Load video file with mobile optimizations
+    // Load video file
     async function loadVideoFile(file) {
         const ext = file.name.split('.').pop()?.toLowerCase();
         const validExts = ['mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v', 'mpg', 'mpeg'];
@@ -477,19 +432,11 @@ function initVideoConverter() {
             return;
         }
         
-        // Mobile file size check
-        const maxSizeMB = isMobile ? 50 : 200;
-        const fileSizeMB = file.size / 1024 / 1024;
-        
-        if (file.size > maxSizeMB * 1024 * 1024) {
-            const errorMsg = isMobile 
-                ? `Video must be under ${maxSizeMB}MB on mobile devices. Your file is ${fileSizeMB.toFixed(1)}MB.`
-                : `Video must be under ${maxSizeMB}MB. Your file is ${fileSizeMB.toFixed(1)}MB.`;
-            
+        if (file.size > 200 * 1024 * 1024) {
             if (window.App) {
-                window.App.showError(errorMsg);
+                window.App.showError('Video must be under 200MB.');
             } else {
-                alert(errorMsg);
+                alert('Video must be under 200MB.');
             }
             return;
         }
@@ -516,27 +463,13 @@ function initVideoConverter() {
         if (videoPreview) {
             videoPreview.onloadedmetadata = () => {
                 currentDuration = videoPreview.duration;
-                
-                // On mobile, cap the maximum trim duration to prevent crashes
-                if (isMobile && currentDuration > 600) { // 10 minutes max on mobile
-                    console.warn(`Long video (${currentDuration.toFixed(0)}s) on mobile - limiting to 5 minutes`);
-                    if (trimEnd) trimEnd.value = Math.min(100, (300 / currentDuration) * 100);
-                }
-                
                 if (trimStart) trimStart.max = 100;
                 if (trimEnd) trimEnd.max = 100;
                 if (trimEnd) trimEnd.value = 100;
                 if (trimStart) trimStart.value = 0;
                 updateTrimLabels();
                 
-                console.log(`Video loaded: ${currentDuration.toFixed(2)} seconds (${fileSizeMB.toFixed(1)}MB)`);
-                
-                // Show warning for large files on mobile
-                if (isMobile && fileSizeMB > 30) {
-                    if (window.App) {
-                        window.App.showError(`Large file (${fileSizeMB.toFixed(1)}MB) may take time to convert on mobile. Please be patient.`, 5000);
-                    }
-                }
+                console.log(`Video loaded: ${currentDuration.toFixed(2)} seconds`);
             };
         }
         
@@ -629,13 +562,7 @@ function initVideoConverter() {
                 
                 // Get trim times
                 const { startTime, endTime } = videoConverter.getTrimTimes();
-                const duration = endTime - startTime;
-                console.log(`Trimming: ${startTime.toFixed(1)}s to ${endTime.toFixed(1)}s (${duration.toFixed(1)}s duration)`);
-                
-                // Check duration limit on mobile
-                if (isMobile && duration > 300) { // 5 minutes max on mobile
-                    throw new Error('Mobile devices can only convert up to 5 minutes of audio. Please trim your video shorter.');
-                }
+                console.log(`Trimming: ${startTime.toFixed(1)}s to ${endTime.toFixed(1)}s (${(endTime - startTime).toFixed(1)}s duration)`);
                 
                 // Convert
                 videoConvertBtn.innerHTML = '<span class="spinner"></span> Converting to MP3...';
@@ -666,8 +593,8 @@ function initVideoConverter() {
                     if (todayCount) todayCount.textContent = window.StatsStore.getToday();
                 }
                 
-                // Show feedback modal (only on desktop or after successful conversion)
-                if (window.App && !isMobile) {
+                // Show feedback modal
+                if (window.App) {
                     setTimeout(() => window.App.showFeedbackModal(), 1500);
                 }
                 
@@ -676,7 +603,7 @@ function initVideoConverter() {
             } catch (error) {
                 console.error('Conversion failed:', error);
                 if (window.App) {
-                    window.App.showError(error.message || 'Conversion failed. Please try again with a shorter MP4 file.');
+                    window.App.showError(error.message || 'Conversion failed. Please try again with an MP4 file.');
                 }
                 if (videoProgress) videoProgress.style.display = 'none';
             } finally {
@@ -718,11 +645,10 @@ function initVideoConverter() {
         });
     }
     
-    console.log(`Video converter initialized (${isMobile ? 'mobile mode' : 'desktop mode'})`);
+    console.log('Video converter initialized');
 }
 
 // Export for global use
 if (typeof window !== 'undefined') {
     window.initVideoConverter = initVideoConverter;
-    window.isMobile = isMobile;
 }
