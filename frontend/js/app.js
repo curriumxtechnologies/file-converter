@@ -419,3 +419,61 @@ document.addEventListener('DOMContentLoaded', () => {
     
     console.log('App fully initialized');
 });
+
+// Simple floating debug widget
+(function() {
+    let debugVisible = false;
+    let debugMessages = [];
+    
+    function createDebugWidget() {
+        const widget = document.createElement('div');
+        widget.id = 'simpleDebugWidget';
+        widget.innerHTML = `
+            <div style="position: fixed; bottom: 10px; right: 10px; z-index: 99999;">
+                <button id="debugToggleBtn" style="background: #4F46E5; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 24px; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">
+                    🐛
+                </button>
+                <div id="debugMessages" style="display: none; position: absolute; bottom: 60px; right: 0; width: 300px; max-height: 400px; background: rgba(0,0,0,0.95); color: #0f0; border-radius: 8px; padding: 10px; font-family: monospace; font-size: 11px; overflow-y: auto; border: 1px solid #0f0;">
+                    <div style="font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid #0f0;">Debug Logs</div>
+                    <div id="debugMessagesList"></div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(widget);
+        
+        const toggleBtn = document.getElementById('debugToggleBtn');
+        const messagesDiv = document.getElementById('debugMessages');
+        const messagesList = document.getElementById('debugMessagesList');
+        
+        toggleBtn.addEventListener('click', () => {
+            debugVisible = !debugVisible;
+            messagesDiv.style.display = debugVisible ? 'block' : 'none';
+            if (debugVisible) updateMessagesList();
+        });
+        
+        function updateMessagesList() {
+            if (!messagesList) return;
+            messagesList.innerHTML = debugMessages.slice(-20).map(msg => 
+                `<div style="border-bottom: 1px solid #333; padding: 3px 0; word-wrap: break-word;">${new Date(msg.timestamp).toLocaleTimeString()}: ${msg.message}</div>`
+            ).join('');
+        }
+        
+        window.addDebugMessage = function(message) {
+            debugMessages.push({ timestamp: Date.now(), message });
+            if (debugMessages.length > 100) debugMessages.shift();
+            if (debugVisible) updateMessagesList();
+            console.log('[Debug]', message);
+        };
+    }
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', createDebugWidget);
+    } else {
+        createDebugWidget();
+    }
+})();
+
+// Usage examples - add this to your video-converter.js
+window.addDebugMessage('Debug widget initialized');
+window.addDebugMessage(`SharedArrayBuffer: ${typeof SharedArrayBuffer !== 'undefined'}`);
+window.addDebugMessage(`User Agent: ${navigator.userAgent}`);
