@@ -418,7 +418,7 @@ function initVideoConverter() {
         });
     });
     
-    // Load video file
+    // Replace your existing loadVideoFile function with this
     async function loadVideoFile(file) {
         const ext = file.name.split('.').pop()?.toLowerCase();
         const validExts = ['mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v', 'mpg', 'mpeg'];
@@ -426,62 +426,112 @@ function initVideoConverter() {
         if (!validExts.includes(ext)) {
             if (window.App) {
                 window.App.showError('Please select a video file (MP4, MOV, AVI, WebM, MKV).');
-            } else {
-                alert('Please select a video file (MP4, MOV, AVI, WebM, MKV).');
             }
             return;
         }
         
-        if (file.size > 200 * 1024 * 1024) {
-            if (window.App) {
-                window.App.showError('Video must be under 200MB.');
-            } else {
-                alert('Video must be under 200MB.');
-            }
+        // Mobile file size check
+        const maxSizeMB = isMobile ? 50 : 200;
+        const fileSizeMB = file.size / 1024 / 1024;
+        
+        if (file.size > maxSizeMB * 1024 * 1024) {
+            const errorMsg = isMobile 
+                ? `Video must be under ${maxSizeMB}MB on mobile devices. Your file is ${fileSizeMB.toFixed(1)}MB.`
+                : `Video must be under ${maxSizeMB}MB. Your file is ${fileSizeMB.toFixed(1)}MB.`;
+            
+            if (window.App) window.App.showError(errorMsg);
             return;
         }
         
         currentVideoFile = file;
-        const url = URL.createObjectURL(file);
+        
+        // Create URL with error handling
+        let url;
+        try {
+            url = URL.createObjectURL(file);
+        } catch (e) {
+            console.error('Failed to create object URL:', e);
+            if (window.App) window.App.showError('Cannot process this video file on your device. Please try a different video.');
+            return;
+        }
         
         if (videoPreview) {
+            // Clear any existing source
+            videoPreview.src = '';
+            videoPreview.load();
+            
+            // Set new source
             videoPreview.src = url;
-        }
-        
-        if (videoSection) {
-            videoSection.style.display = 'block';
-        }
-        
-        if (videoProgress) {
-            videoProgress.style.display = 'none';
-        }
-        
-        if (videoDownloadReady) {
-            videoDownloadReady.style.display = 'none';
-        }
-        
-        if (videoPreview) {
+            
+            // Add error handler specifically for video loading
+            videoPreview.onerror = (e) => {
+                console.error('Video preview error:', e);
+                const errorCode = videoPreview.error?.code;
+                let errorMessage = 'Cannot preview this video. ';
+                
+                switch(errorCode) {
+                    case 1:
+                        errorMessage += 'The video file is corrupted or in an unsupported format. Try converting it to H.264 MP4 first.';
+                        break;
+                    case 2:
+                        errorMessage += 'Network error while loading video.';
+                        break;
+                    case 3:
+                        errorMessage += 'Video decoding failed. The codec may not be supported on your device.';
+                        break;
+                    case 4:
+                        errorMessage += 'Video format not supported. Please use MP4 with H.264 codec.';
+                        break;
+                    default:
+                        errorMessage += 'Your phone may not support this video format. Try converting it to MP4 (H.264) first.';
+                }
+                
+                if (window.App) window.App.showError(errorMessage);
+                URL.revokeObjectURL(url);
+                videoPreview.src = '';
+            };
+            
             videoPreview.onloadedmetadata = () => {
                 currentDuration = videoPreview.duration;
+                
+                if (isNaN(currentDuration) || !isFinite(currentDuration)) {
+                    console.error('Invalid duration:', currentDuration);
+                    if (window.App) window.App.showError('Cannot read video duration. The file may be corrupted.');
+                    return;
+                }
+                
                 if (trimStart) trimStart.max = 100;
                 if (trimEnd) trimEnd.max = 100;
                 if (trimEnd) trimEnd.value = 100;
                 if (trimStart) trimStart.value = 0;
                 updateTrimLabels();
                 
-                console.log(`Video loaded: ${currentDuration.toFixed(2)} seconds`);
+                console.log(`✓ Video loaded: ${currentDuration.toFixed(2)} seconds (${fileSizeMB.toFixed(1)}MB)`);
+                
+                // Show warning for large files on mobile
+                if (isMobile && fileSizeMB > 30) {
+                    if (window.App) {
+                        window.App.showError(`Large file (${fileSizeMB.toFixed(1)}MB) may take time to convert on mobile.`, 5000);
+                    }
+                }
+                
+                // Hide upload zone, show video section
+                if (videoSection) videoSection.style.display = 'block';
+                if (videoUploadZone) videoUploadZone.style.display = 'none';
             };
-        }
-        
-        if (videoPreview) {
-            videoPreview.scrollIntoView({ behavior: 'smooth' });
+            
+            // Add canplay event to verify video is actually playable
+            videoPreview.oncanplay = () => {
+                console.log('Video can play - codec supported');
+            };
+            
+            videoPreview.load(); // Force load
         }
         
         if (window.App && window.App.hideError) {
             window.App.hideError();
         }
         
-        // Reset converter state
         videoConverter.reset();
     }
     
