@@ -170,9 +170,29 @@ class HeicConverter {
 
     static async createZip(files) {
         try {
-            // Dynamically import JSZip
-            const JSZipModule = await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js');
-            const JSZip = JSZipModule.default || JSZipModule;
+            // Load JSZip dynamically with proper handling
+            let JSZip;
+            
+            try {
+                // Try ES module import first
+                const module = await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js');
+                JSZip = module.default || module.JSZip || module;
+            } catch (importError) {
+                // Fallback: load as script tag
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+                    script.onload = resolve;
+                    script.onerror = () => reject(new Error('Failed to load JSZip'));
+                    document.head.appendChild(script);
+                });
+                JSZip = window.JSZip;
+            }
+            
+            if (!JSZip) {
+                throw new Error('JSZip not available');
+            }
+            
             const zip = new JSZip();
             
             const usedNames = new Set();
