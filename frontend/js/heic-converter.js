@@ -364,24 +364,29 @@ class HeicUIManager {
                 }
             }
 
-            // Auto-download for single file
-            if (successCount === 1) {
+            // Handle downloads - use shorter timeout and ensure App.downloadBlob exists
+            if (successCount === 1 && window.App && typeof window.App.downloadBlob === 'function') {
+                // Single file: download immediately
                 const f = results.find(r => r.result.success);
-                if (f && window.App) {
-                    setTimeout(() => window.App.downloadBlob(f.result.blob, f.result.name), 500);
+                if (f) {
+                    // Small delay to ensure UI updates first
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    window.App.downloadBlob(f.result.blob, f.result.name);
                 }
             } 
             // Auto-download ZIP for bulk conversions
-            else if (successCount > BULK_DOWNLOAD_THRESHOLD && this.state.zipBlob && window.App) {
-                setTimeout(() => window.App.downloadBlob(this.state.zipBlob, `converted_${successCount}_images.zip`), 800);
+            else if (successCount > 1 && this.state.zipBlob && window.App && typeof window.App.downloadBlob === 'function') {
+                // Small delay to ensure UI updates first
+                await new Promise(resolve => setTimeout(resolve, 100));
+                window.App.downloadBlob(this.state.zipBlob, `converted_${successCount}_images.zip`);
             }
 
-            // Show feedback modal
-            if (successCount > 0 && window.App) {
-                setTimeout(() => window.App.showFeedbackModal(), 1500);
+            // Show feedback modal after download
+            if (successCount > 0 && window.App && typeof window.App.showFeedbackModal === 'function') {
+                setTimeout(() => window.App.showFeedbackModal(), 2000);
             }
             
-            console.log(`Converted ${successCount}/${successCount + results.filter(r => !r.result.success).length} files in ${elapsed}s`);
+            console.log(`Converted ${successCount}/${results.length} files in ${elapsed}s`);
 
         } catch (error) {
             console.error('Batch conversion error:', error);
