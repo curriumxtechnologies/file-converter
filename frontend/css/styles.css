@@ -39,7 +39,7 @@
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    background: linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%);
+    background-color: #F9FAFB;
     color: var(--color-gray-900);
     line-height: 1.6;
     min-height: 100vh;
@@ -118,16 +118,10 @@ body {
     line-height: 1.2;
     margin-bottom: 1rem;
     color: var(--color-gray-900);
-    background: linear-gradient(135deg, var(--color-gray-900) 0%, var(--color-primary) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
 }
 
 .accent-text {
     color: var(--color-primary);
-    position: relative;
-    -webkit-text-fill-color: var(--color-primary);
 }
 
 .hero-subtitle {
@@ -495,7 +489,7 @@ body {
 }
 
 .bulk-download-card {
-    background: linear-gradient(135deg, var(--color-primary-bg) 0%, #F5F3FF 100%);
+    background: var(--color-primary-bg);
     border: 2px solid var(--color-primary);
     border-radius: var(--border-radius-xl);
     padding: 1.5rem;
@@ -605,27 +599,40 @@ body {
     cursor: pointer;
     transition: all 0.2s;
     font-family: inherit;
+    position: relative;
+    overflow: hidden;
 }
 
 .tab-btn:hover {
     border-color: var(--color-primary-light);
     color: var(--color-primary);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.tab-btn:active {
+    transform: translateY(0);
 }
 
 .tab-btn.active {
     border-color: var(--color-primary);
-    background: var(--color-primary-bg);
-    color: var(--color-primary);
+    background: var(--color-primary);
+    color: var(--color-white);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
 }
 
 /* Tab Content */
 .tab-content {
     display: none;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 .tab-content.active {
     display: block;
-    animation: fadeIn 0.3s ease;
+    opacity: 1;
+    transform: translateY(0);
 }
 
 /* Video Section */
@@ -753,7 +760,7 @@ body {
 
 .progress-bar {
     height: 100%;
-    background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    background: var(--color-primary);
     border-radius: 4px;
     transition: width 0.3s ease;
     width: 0%;
@@ -1021,77 +1028,4 @@ body {
     .stat-label {
         font-size: 0.625rem;
     }
-}
-
-/* Tab button styles */
-.tab-btn {
-    position: relative;
-    overflow: hidden;
-    transition: all 0.3s ease;
-}
-
-.tab-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.tab-btn:active {
-    transform: translateY(0);
-}
-
-.tab-btn.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-
-/* Tab content transitions */
-.tab-content {
-    opacity: 0;
-    transform: translateY(10px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.tab-content.active {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-/* Ripple animation */
-@keyframes ripple {
-    to {
-        transform: scale(4);
-        opacity: 0;
-    }
-}
-
-/* Modal transitions */
-.feedback-modal,
-.thank-you-modal {
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.feedback-modal[style*="display: flex"],
-.thank-you-modal[style*="display: flex"] {
-    opacity: 1;
-}
-
-/* Error section transition */
-.error-section {
-    transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-/* Tab content initial states - ADD THIS */
-.tab-content {
-    opacity: 0;
-    transform: translateY(10px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-    display: none;
-}
-
-.tab-content.active {
-    display: block;
-    opacity: 1;
-    transform: translateY(0);
 }
