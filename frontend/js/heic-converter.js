@@ -170,36 +170,30 @@ class HeicConverter {
 
     static async createZip(files) {
         try {
-            // Load JSZip dynamically with proper handling
-            let JSZip;
-            
-            try {
-                // Try ES module import first
-                const module = await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js');
-                JSZip = module.default || module.JSZip || module;
-            } catch (importError) {
-                // Fallback: load as script tag
+            // Load JSZip from reliable CDNJS (UMD format)
+            if (typeof window.JSZip === 'undefined') {
                 await new Promise((resolve, reject) => {
                     const script = document.createElement('script');
                     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-                    script.onload = resolve;
-                    script.onerror = () => reject(new Error('Failed to load JSZip'));
+                    script.onload = () => {
+                        if (typeof window.JSZip !== 'undefined') {
+                            resolve();
+                        } else {
+                            reject(new Error('JSZip failed to initialize'));
+                        }
+                    };
+                    script.onerror = () => reject(new Error('Failed to load JSZip from CDN'));
                     document.head.appendChild(script);
                 });
-                JSZip = window.JSZip;
             }
             
-            if (!JSZip) {
-                throw new Error('JSZip not available');
-            }
-            
-            const zip = new JSZip();
+            const zip = new window.JSZip();
             
             const usedNames = new Set();
             files.forEach(f => {
                 let name = f.name;
                 if (usedNames.has(name)) {
-                    const base = name.replace('.png', '');
+                    const base = name.replace(/\.png$/, '');
                     let counter = 1;
                     while (usedNames.has(`${base}_${counter}.png`)) counter++;
                     name = `${base}_${counter}.png`;
